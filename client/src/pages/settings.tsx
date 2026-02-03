@@ -1,116 +1,225 @@
+
 import * as React from "react";
+// React already imported or not needed as * import if handled by other imports
 import { AtendePsiShell } from "@/components/atendepsi-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+import { Plus, X, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SettingsPage() {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(true);
+  const [userId, setUserId] = React.useState<string | null>(null);
+
   const [aiOn, setAiOn] = React.useState(true);
   const [tone, setTone] = React.useState("Objetiva");
+  const [agentName, setAgentName] = React.useState("Sofia");
+  const [phone, setPhone] = React.useState("");
+  const [restrictions, setRestrictions] = React.useState<string[]>([]); // Initialize empty
+  const [newRestriction, setNewRestriction] = React.useState("");
+
+  React.useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        setUserId(user.id);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching profile:', error);
+        }
+
+        if (data) {
+          setAgentName(data.ai_name || "Sofia");
+          setTone(data.ai_tone || "Objetiva");
+          setPhone(data.phone || "");
+          setRestrictions(data.ai_restrictions || []);
+          // Note: aiOn status isn't in profiles yet, keeping local or assume active
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addRestriction = () => {
+    if (newRestriction.trim()) {
+      setRestrictions([...restrictions, newRestriction.trim()]);
+      setNewRestriction("");
+    }
+  };
+
+  const removeRestriction = (index: number) => {
+    setRestrictions(restrictions.filter((_, i) => i !== index));
+  };
+
+  const handleSave = async () => {
+    if (!userId) return;
+
+    try {
+      const updates = {
+        id: userId,
+        ai_name: agentName,
+        ai_tone: tone,
+        phone: phone,
+        ai_restrictions: restrictions,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('profiles').upsert(updates);
+
+      if (error) throw error;
+      toast({
+        title: "Sucesso",
+        description: "Configurações salvas com sucesso!",
+        className: "bg-green-600 text-white border-none"
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar configurações.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <AtendePsiShell title="Configurações">
+        <div className="flex items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AtendePsiShell>
+    )
+  }
 
   return (
-    <AtendePsiShell title="Configura\u00e7\u00f5es">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="ap-card ap-noise rounded-2xl p-5">
-          <div
-            className="text-sm font-semibold tracking-[-0.01em]"
-            style={{ fontFamily: "DM Sans, var(--font-sans)" }}
-            data-testid="text-settings-ai-profile"
-          >
-            Perfil da IA
+    <AtendePsiShell title="Configurações">
+      <div className="h-full overflow-y-auto flex-1 min-h-0 pb-1 pr-2">
+        <div className="flex flex-col gap-3">
+
+          {/* Status Section - Compact */}
+          <div className="ap-card ap-noise rounded-2xl p-5 border border-border/60 shadow-sm">
+            <div className="flex flex-row items-center justify-between gap-4">
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold tracking-tight">Status da IA</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">Ativar ou pausar o piloto automático.</p>
+              </div>
+              <Switch
+                checked={aiOn}
+                onCheckedChange={setAiOn}
+                className="scale-110 data-[state=checked]:bg-[#006f9a]"
+              />
+            </div>
           </div>
 
-          <div className="mt-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="agentName" data-testid="label-agent-name">Nome do agente</Label>
-              <Input id="agentName" defaultValue="AtendePsi" className="rounded-2xl" data-testid="input-agent-name" />
-            </div>
+          {/* Profile Section - Compact */}
+          <div className="ap-card rounded-2xl p-5 bg-card/50 border border-border/60 shadow-sm">
+            <h2 className="text-lg font-semibold tracking-tight mb-3">Perfil do Agente</h2>
 
-            <div className="space-y-2">
-              <Label data-testid="label-agent-tone">Comunica\u00e7\u00e3o</Label>
-              <Select value={tone} onValueChange={setTone}>
-                <SelectTrigger className="rounded-2xl" data-testid="select-agent-tone">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Formal" data-testid="option-tone-formal">Formal</SelectItem>
-                  <SelectItem value="Objetiva" data-testid="option-tone-objetiva">Objetiva</SelectItem>
-                  <SelectItem value="Descontra\u00edda" data-testid="option-tone-descontraida">Descontra\u00edda</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Nome do Agente</Label>
+                <Input
+                  value={agentName}
+                  onChange={(e) => setAgentName(e.target.value)}
+                  className="h-10 rounded-xl bg-muted/40 border-border/60 text-base"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label data-testid="label-restrictions">Restri\u00e7\u00f5es</Label>
-              <Textarea
-                defaultValue={[
-                  "N\u00e3o atende segundas e ter\u00e7as.",
-                  "N\u00e3o responde fora do hor\u00e1rio comercial.",
-                  "N\u00e3o agenda determinados procedimentos.",
-                ].join("\n")}
-                className="min-h-[160px] rounded-2xl"
-                data-testid="textarea-restrictions"
-              />
-              <div className="text-xs text-muted-foreground" data-testid="text-restrictions-hint">
-                Regras operacionais que a IA n\u00e3o pode violar.
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Telefone (WhatsApp)</Label>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="ex: 5511999999999"
+                  className="h-10 rounded-xl bg-muted/40 border-border/60 text-base"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Tom de Comunicação</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["Formal", "Objetiva", "Descontraída"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTone(t)}
+                      className={cn(
+                        "px-2 py-2 rounded-lg text-xs font-medium transition-all border",
+                        tone === t
+                          ? "bg-[#006f9a] text-white border-[#006f9a] shadow-sm"
+                          : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/60"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-end">
-              <Button className="rounded-full" data-testid="button-save-settings">
-                Salvar altera\u00e7\u00f5es
+          {/* Restrictions Section - Compact */}
+          <div className="ap-card rounded-2xl p-5 bg-card/50 border border-border/60 shadow-sm">
+            <h2 className="text-lg font-semibold tracking-tight mb-3">Restrições Operacionais</h2>
+
+            <div className="space-y-2">
+              {restrictions.map((r, i) => (
+                <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/40 hover:border-border transition-colors">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <div className="h-1.5 w-1.5 rounded-full bg-destructive/60 shrink-0" />
+                    <span className="text-xs font-medium truncate">{r}</span>
+                  </div>
+                  <button onClick={() => removeRestriction(i)} className="text-muted-foreground hover:text-destructive transition-colors px-1">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <Input
+                placeholder="Adicionar restrição..."
+                value={newRestriction}
+                onChange={(e) => setNewRestriction(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addRestriction()}
+                className="h-9 rounded-lg bg-background border-border/60 text-sm"
+              />
+              <Button onClick={addRestriction} size="icon" className="h-9 w-9 rounded-lg shrink-0 bg-muted hover:bg-muted/80 text-foreground">
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
           </div>
-        </div>
 
-        <div className="ap-card ap-noise rounded-2xl p-5">
-          <div
-            className="text-sm font-semibold tracking-[-0.01em]"
-            style={{ fontFamily: "DM Sans, var(--font-sans)" }}
-            data-testid="text-settings-status"
-          >
-            Status da IA e Conex\u00f5es
+          <div className="flex justify-between items-center pt-8 border-t border-border/50">
+            <Button variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2">
+              <LogOut className="h-4 w-4" />
+              Sair da conta
+            </Button>
+
+            <Button onClick={handleSave} className="rounded-full h-11 px-8 text-sm shadow-lg shadow-[#006f9a]/20 bg-[#006f9a] hover:bg-[#005a7d] text-white font-medium">
+              Salvar Alterações
+            </Button>
           </div>
 
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-              <div>
-                <div className="text-sm font-medium" data-testid="text-toggle-ai-title">IA</div>
-                <div className="text-xs text-muted-foreground" data-testid="text-toggle-ai-sub">Ligar / desligar assistente</div>
-              </div>
-              <Switch checked={aiOn} onCheckedChange={setAiOn} data-testid="toggle-ai-settings" />
-            </div>
-
-            <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium" data-testid="text-status-whatsapp">WhatsApp</div>
-                  <div className="text-xs text-muted-foreground" data-testid="text-status-whatsapp-sub">Conectado</div>
-                </div>
-                <Button variant="secondary" className="rounded-full" data-testid="button-disconnect-whatsapp">
-                  Desconectar
-                </Button>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium" data-testid="text-status-calendar">Google Agenda</div>
-                  <div className="text-xs text-muted-foreground" data-testid="text-status-calendar-sub">N\u00e3o conectado</div>
-                </div>
-                <Button className="rounded-full" data-testid="button-connect-calendar">Conectar</Button>
-              </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground" data-testid="text-status-hint">
-              Tudo expl\u00edcito. Sem ambiguidade.
-            </div>
-          </div>
         </div>
       </div>
     </AtendePsiShell>

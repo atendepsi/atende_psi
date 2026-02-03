@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import React from "react";
 import {
   Bar,
   BarChart,
@@ -7,172 +7,224 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Cell,
 } from "recharts";
-
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { AtendePsiShell } from "@/components/atendepsi-shell";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
+import { ChartDataPoint } from "@/types/dashboard";
 
-type HourPoint = { hour: string; value: number };
+const OlaAnimation = ({ name }: { name: string }) => {
+  const [revealed, setRevealed] = React.useState(false);
 
-const data: HourPoint[] = [
-  { hour: "08h", value: 6 },
-  { hour: "09h", value: 12 },
-  { hour: "10h", value: 18 },
-  { hour: "11h", value: 15 },
-  { hour: "12h", value: 10 },
-  { hour: "13h", value: 8 },
-  { hour: "14h", value: 14 },
-  { hour: "15h", value: 19 },
-  { hour: "16h", value: 22 },
-  { hour: "17h", value: 16 },
-  { hour: "18h", value: 11 },
-];
+  React.useEffect(() => {
+    const t = setTimeout(() => setRevealed(true), 100);
+    return () => clearTimeout(t);
+  }, []);
 
-function dynamicTop(points: { value: number }[]) {
-  const max = Math.max(...points.map((p) => p.value));
-  const pad = Math.max(4, Math.ceil(max * 0.35));
-  return max + pad;
-}
+  const gradientStyle: React.CSSProperties = {
+    backgroundImage: `linear-gradient(90deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)) 50%, transparent 50%)`,
+    backgroundSize: "200% 100%",
+    backgroundPosition: revealed ? "0% 0" : "100% 0",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+    color: "transparent",
+    opacity: revealed ? 1 : 0,
+    transition: "background-position 3.5s ease, opacity 3.5s ease",
+  };
 
-function KpiCard({
-  label,
-  value,
-  testId,
-}: {
-  label: string;
-  value: string;
-  testId: string;
-}) {
   return (
-    <div className="ap-card ap-kpi ap-noise rounded-2xl p-5">
-      <div className="text-xs text-muted-foreground" data-testid={`label-${testId}`}>
-        {label}
-      </div>
-      <div
-        className="mt-2 text-[34px] leading-none tracking-[-0.02em] text-foreground"
-        style={{ fontFamily: "DM Sans, var(--font-sans)" }}
-        data-testid={`kpi-${testId}`}
+    <div className="mb-0 leading-tight py-1 pr-8">
+      <span
+        className="font-['Caveat'] font-bold text-[5.5rem] md:text-[6.5rem] inline-block"
+        style={gradientStyle}
       >
-        {value}
-      </div>
+        Olá {name}&nbsp;
+      </span>
     </div>
   );
-}
-
-function SecondaryKpi({
-  label,
-  value,
-  testId,
-}: {
-  label: string;
-  value: string;
-  testId: string;
-}) {
-  return (
-    <div className="ap-card-soft rounded-2xl p-4">
-      <div className="text-xs text-muted-foreground" data-testid={`label-${testId}`}>
-        {label}
-      </div>
-      <div
-        className="mt-1 text-xl font-semibold tracking-[-0.01em]"
-        style={{ fontFamily: "DM Sans, var(--font-sans)" }}
-        data-testid={`kpi-${testId}`}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="ap-card-soft rounded-2xl px-3 py-2">
-      <div className="text-xs text-muted-foreground" data-testid="text-tooltip-label">
-        {label}
-      </div>
-      <div className="text-sm font-medium" data-testid="text-tooltip-value">
-        {payload[0]?.value} mensagens
-      </div>
-    </div>
-  );
-}
+};
 
 export default function DashboardPage() {
-  const top = dynamicTop(data);
+  const { data, loading } = useDashboardData();
+
+  if (loading || !data) {
+    return (
+      <AtendePsiShell title="">
+        <div className="flex flex-col gap-4 h-full overflow-hidden items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </AtendePsiShell>
+    );
+  }
 
   return (
-    <AtendePsiShell title="Calma para atender. Clareza para decidir.">
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-      >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <KpiCard label="Agendamentos" value="18" testId="agendamentos" />
-          <KpiCard label="Tempo médio de resposta" value="1m 24s" testId="tempo-resposta" />
+    <AtendePsiShell title="">
+      <div className="flex flex-col gap-4 h-full overflow-hidden">
+        {/* Dynamic Greeting - Executive Layout */}
+        <div className="shrink-0 -mt-7 animate-entry">
+          <div className="flex items-center justify-between">
+            <OlaAnimation name={data.greeting.psychologistName} />
+          </div>
+
+          <p className="text-[2rem] md:text-[2.5rem] text-muted-foreground leading-snug font-medium mt-0 md:-mt-6 pl-1">
+            Hoje <strong className="text-[#006f9a] font-bold">{data.greeting.aiName}</strong> atendeu <strong className="text-[#006f9a] font-semibold">{data.metrics.totalPatients}</strong> pacientes.
+          </p>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <SecondaryKpi label="Mensagens enviadas" value="324" testId="mensagens" />
-          <SecondaryKpi label="Redirecionamentos" value="9" testId="redirecionamentos" />
-          <SecondaryKpi label="Qualidade da triagem" value="92%" testId="qualidade" />
-        </div>
+        {/* Main Grid Layout - Auto fit remaining height */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0 pb-1">
 
-        <div className="mt-6 ap-card ap-noise rounded-2xl p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div
-                className="text-sm font-semibold tracking-[-0.01em]"
-                style={{ fontFamily: "DM Sans, var(--font-sans)" }}
-                data-testid="text-chart-title"
-              >
-                Atividade por horário
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground" data-testid="text-chart-subtitle">
-                Volume de mensagens por horário (hoje)
-              </div>
+          {/* Row 1: 4 KPIs */}
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
+            <div className="text-sm font-medium text-muted-foreground">Tempo médio</div>
+            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+              {data.metrics.averageTime}
             </div>
-            <div className="text-xs text-muted-foreground" data-testid="text-chart-legend">
-              Mensagens
+            <div className="mt-1 flex items-center text-xs text-muted-foreground">
+              <span className={`font-medium flex items-center mr-1 ${data.metrics.averageTimeChange.trend === 'down' ? 'text-emerald-600' : 'text-red-600'}`}>
+                <ArrowDownRight className="h-3 w-3 mr-0.5" /> {data.metrics.averageTimeChange.value}%
+              </span>
+              vs ontem
             </div>
           </div>
 
-          <div className="mt-4 h-[320px]" data-testid="chart-activity">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} margin={{ left: 10, right: 12, top: 8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="apBar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.95} />
-                    <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0.35} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="hsl(var(--border) / 0.7)" vertical={false} />
-                <XAxis
-                  dataKey="hour"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                />
-                <YAxis
-                  domain={[0, top]}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                  width={32}
-                />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--primary) / 0.06)" }} />
-                <Bar
-                  dataKey="value"
-                  radius={[12, 12, 12, 12]}
-                  fill="url(#apBar)"
-                  stroke="hsl(var(--primary) / 0.35)"
-                  strokeWidth={1}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
+            <div className="text-sm font-medium text-muted-foreground">Mensagens</div>
+            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+              {data.metrics.totalMessages}
+            </div>
+            <div className="mt-1 flex items-center text-xs text-muted-foreground">
+              <span className={`font-medium flex items-center mr-1 ${data.metrics.totalMessagesChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
+                <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.totalMessagesChange.value}%
+              </span>
+              vs ontem
+            </div>
           </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-sm font-medium text-muted-foreground">Autonomia IA</div>
+            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+              {data.metrics.aiAutonomy}
+            </div>
+            <div className="mt-1 flex items-center text-xs text-muted-foreground">
+              <span className={`font-medium flex items-center mr-1 ${data.metrics.aiAutonomyChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
+                <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.aiAutonomyChange.value}%
+              </span>
+              vs ontem
+            </div>
+          </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-sm font-medium text-muted-foreground">Redirecionamentos</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.humanRedirects}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Para humano</div>
+          </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-sm font-medium text-muted-foreground">Agendamentos</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.appointments}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Esta semana</div>
+          </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-sm font-medium text-muted-foreground">Remarcações</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.reschedules}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Apenas 3% do total</div>
+          </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-xs font-medium text-muted-foreground">Cancelamentos</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-red-500">{data.metrics.cancellations}</div>
+          </div>
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-between animate-entry delay-200">
+            <div className="mb-2">
+              <span className="text-xs font-medium text-foreground leading-tight block">Seu feedback é importante pra nós</span>
+            </div>
+            <button className="w-full text-[10px] font-semibold bg-muted text-foreground hover:bg-muted/80 py-2 rounded-md transition-colors shadow-sm whitespace-normal leading-tight text-center px-1">
+              Fale com a equipe AtendePsi via WhatsApp
+            </button>
+          </div>
+
+          {/* Chart - Spans full width (4 cols) */}
+          <div className="col-span-1 md:col-span-4 ap-card p-6 rounded-2xl flex flex-col justify-center min-h-[350px] animate-entry delay-300">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 shrink-0">
+              <div>
+                <h3 className="text-xl font-semibold tracking-tight text-foreground">Volume de mensagens por horário</h3>
+              </div>
+            </div>
+
+            <div className="w-full flex-1 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="barGradientExecutive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--executive-blue))" stopOpacity={1} />
+                      <stop offset="100%" stopColor="hsl(var(--executive-blue))" stopOpacity={0.6} />
+                    </linearGradient>
+                    <filter id="shadow" height="130%">
+                      <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+                      <feOffset dx="0" dy="2" result="offsetblur" />
+                      <feFlood floodColor="hsl(var(--executive-blue))" floodOpacity="0.3" />
+                      <feComposite in2="offsetblur" operator="in" />
+                      <feMerge>
+                        <feMergeNode />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13, fontWeight: 500 }}
+                    dy={12}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13, fontWeight: 500 }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "hsl(var(--executive-blue) / 0.08)", radius: 8 }}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--popover) / 0.95)",
+                      backdropFilter: "blur(8px)",
+                      borderRadius: "0.5rem",
+                      border: "1px solid hsl(var(--border))",
+                      boxShadow: "0 10px 30px -10px rgba(0,0,0,0.15)",
+                      padding: "12px 16px"
+                    }}
+                    itemStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+                    labelStyle={{ color: "hsl(var(--muted-foreground))", marginBottom: "4px", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                  />
+                  <Bar
+                    dataKey="value"
+                    radius={[6, 6, 6, 6]}
+                    barSize={40}
+                    fill="url(#barGradientExecutive)"
+                    filter="url(#shadow)"
+                    animationDuration={1000}
+                    name="Mensagens"
+                  >
+                    {data.chartData.map((entry: ChartDataPoint, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill="url(#barGradientExecutive)"
+                        className="transition-all duration-300 hover:opacity-80 cursor-pointer"
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
         </div>
-      </motion.div>
+      </div>
     </AtendePsiShell>
   );
 }
