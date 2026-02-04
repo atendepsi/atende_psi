@@ -123,139 +123,138 @@ export async function registerRoutes(
     }
   });
 
-}
+
+
+  // Google Calendar Integration Routes
+  const { google } = await import('googleapis');
+
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+
+  // 1. Auth URL generator
+  app.get("/api/auth/google", (req, res) => {
+    const userId = req.query.userId as string || "test-user-id";
+    // We can pass userId in state to retrieve it in callback if session is not persistent across redirects (though session usually is)
+    // For now, assuming session works or we pass state.
+    const state = JSON.stringify({ userId });
+
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/userinfo.email'
+    ];
+
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline', // CRITICAL for refresh token
+      scope: scopes,
+      state: state,
+      prompt: 'consent' // Force consent to ensure refresh token is returned
+    });
+
+    res.json({ url });
   });
 
-// Google Calendar Integration Routes
-const { google } = await import('googleapis');
+  // 2. Callback Handler
+  // Matches the path provided by user: /rest/oauth2-credential/callback
+  // We also keep a standard api route just in case
+  const handleGoogleCallback = async (req: any, res: any) => {
+    const { code, state } = req.query;
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
+    if (!code) {
+      return res.status(400).send("No code provided");
+    }
 
-// 1. Auth URL generator
-app.get("/api/auth/google", (req, res) => {
-  const userId = req.query.userId as string || "test-user-id";
-  // We can pass userId in state to retrieve it in callback if session is not persistent across redirects (though session usually is)
-  // For now, assuming session works or we pass state.
-  const state = JSON.stringify({ userId });
-
-  const scopes = [
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/userinfo.email'
-  ];
-
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline', // CRITICAL for refresh token
-    scope: scopes,
-    state: state,
-    prompt: 'consent' // Force consent to ensure refresh token is returned
-  });
-
-  res.json({ url });
-});
-
-// 2. Callback Handler
-// Matches the path provided by user: /rest/oauth2-credential/callback
-// We also keep a standard api route just in case
-const handleGoogleCallback = async (req: any, res: any) => {
-  const { code, state } = req.query;
-
-  if (!code) {
-    return res.status(400).send("No code provided");
-  }
-
-  try {
-    const { tokens } = await oauth2Client.getToken(code as string);
-
-    // Decode state to get user ID
-    let userId = "test-user-id";
     try {
-      const decodedState = JSON.parse(state as string);
-      if (decodedState.userId) userId = decodedState.userId;
-    } catch (e) {
-      console.error("Failed to parse state", e);
+      const { tokens } = await oauth2Client.getToken(code as string);
+
+      // Decode state to get user ID
+      let userId = "test-user-id";
+      try {
+        const decodedState = JSON.parse(state as string);
+        if (decodedState.userId) userId = decodedState.userId;
+      } catch (e) {
+        console.error("Failed to parse state", e);
+      }
+
+      // Get user profile to identify the connected account
+      oauth2Client.setCredentials(tokens);
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const userInfo = await oauth2.userinfo.get();
+
+      if (!tokens.access_token || !tokens.refresh_token) {
+        // If no refresh token, we might check if we already have one, or fail. 
+        // With prompt='consent', we should get one.
+        console.warn("Missing access or refresh token in response");
+      }
+
+      await storage.storeGoogleToken({
+        userId: userId,
+        accessToken: tokens.access_token!,
+        refreshToken: tokens.refresh_token!, // If undefined, we have a problem for offline access
+        email: userInfo.data.email!,
+        scope: tokens.scope!,
+        expiresIn: tokens.expiry_date ? tokens.expiry_date.toString() : null
+      });
+
+      // Redirect back to frontend
+      // Assuming frontend matches backend host for dev
+      res.redirect("/settings?google_connected=true");
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      res.redirect("/settings?google_connected=false&error=auth_failed");
+    }
+  };
+
+  app.get("/rest/oauth2-credential/callback", handleGoogleCallback);
+  app.get("/api/auth/google/callback", handleGoogleCallback);
+
+  // 3. Status and Events
+  app.get("/api/integrations/google/status", async (req, res) => {
+    const userId = req.query.userId as string || "test-user-id";
+    const token = await storage.getGoogleToken(userId);
+
+    if (!token) {
+      return res.json({ connected: false });
     }
 
-    // Get user profile to identify the connected account
-    oauth2Client.setCredentials(tokens);
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-
-    if (!tokens.access_token || !tokens.refresh_token) {
-      // If no refresh token, we might check if we already have one, or fail. 
-      // With prompt='consent', we should get one.
-      console.warn("Missing access or refresh token in response");
-    }
-
-    await storage.storeGoogleToken({
-      userId: userId,
-      accessToken: tokens.access_token!,
-      refreshToken: tokens.refresh_token!, // If undefined, we have a problem for offline access
-      email: userInfo.data.email!,
-      scope: tokens.scope!,
-      expiresIn: tokens.expiry_date ? tokens.expiry_date.toString() : null
+    res.json({
+      connected: true,
+      email: token.email,
+      expiresIn: token.expiresIn
     });
-
-    // Redirect back to frontend
-    // Assuming frontend matches backend host for dev
-    res.redirect("/settings?google_connected=true");
-  } catch (error) {
-    console.error("Google Auth Error:", error);
-    res.redirect("/settings?google_connected=false&error=auth_failed");
-  }
-};
-
-app.get("/rest/oauth2-credential/callback", handleGoogleCallback);
-app.get("/api/auth/google/callback", handleGoogleCallback);
-
-// 3. Status and Events
-app.get("/api/integrations/google/status", async (req, res) => {
-  const userId = req.query.userId as string || "test-user-id";
-  const token = await storage.getGoogleToken(userId);
-
-  if (!token) {
-    return res.json({ connected: false });
-  }
-
-  res.json({
-    connected: true,
-    email: token.email,
-    expiresIn: token.expiresIn
   });
-});
 
-app.get("/api/calendar/events", async (req, res) => {
-  const userId = "test-user-id"; // TODO: real auth
-  const token = await storage.getGoogleToken(userId);
+  app.get("/api/calendar/events", async (req, res) => {
+    const userId = "test-user-id"; // TODO: real auth
+    const token = await storage.getGoogleToken(userId);
 
-  if (!token) {
-    return res.status(401).json({ message: "Google Calendar not connected" });
-  }
+    if (!token) {
+      return res.status(401).json({ message: "Google Calendar not connected" });
+    }
 
-  try {
-    oauth2Client.setCredentials({
-      access_token: token.accessToken,
-      refresh_token: token.refreshToken
-    });
+    try {
+      oauth2Client.setCredentials({
+        access_token: token.accessToken,
+        refresh_token: token.refreshToken
+      });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const response = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: new Date().toISOString(),
-      maxResults: 10,
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: new Date().toISOString(),
+        maxResults: 10,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
 
-    res.json(response.data.items);
-  } catch (error) {
-    console.error("Calendar API Error:", error);
-    res.status(500).json({ message: "Failed to fetch events" });
-  }
-});
+      res.json(response.data.items);
+    } catch (error) {
+      console.error("Calendar API Error:", error);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
 
-return httpServer;
+  return httpServer;
 }
