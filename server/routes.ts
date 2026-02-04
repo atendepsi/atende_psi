@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import { insertMemorySchema, insertSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -126,34 +126,53 @@ export async function registerRoutes(
 
 
   // Google Calendar Integration Routes
-  const { google } = await import('googleapis');
+  let oauth2Client: any = null;
+  let google: any = null;
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
+  try {
+    const googleModule = await import('googleapis');
+    google = googleModule.google;
+
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
+      console.warn("Google Calendar Env Vars missing. Integration disabled.");
+    } else {
+      oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
+    }
+  } catch (err) {
+    console.error("Failed to initialize Google Calendar integration:", err);
+  }
 
   // 1. Auth URL generator
   app.get("/api/auth/google", (req, res) => {
-    const userId = req.query.userId as string || "test-user-id";
-    // We can pass userId in state to retrieve it in callback if session is not persistent across redirects (though session usually is)
-    // For now, assuming session works or we pass state.
-    const state = JSON.stringify({ userId });
+    if (!oauth2Client) {
+      return res.status(503).json({ message: "Google Integration not configured on server." });
+    }
 
-    const scopes = [
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ];
+    try {
+      const userId = req.query.userId as string || "test-user-id";
+      const state = JSON.stringify({ userId });
 
-    const url = oauth2Client.generateAuthUrl({
-      access_type: 'offline', // CRITICAL for refresh token
-      scope: scopes,
-      state: state,
-      prompt: 'consent' // Force consent to ensure refresh token is returned
-    });
+      const scopes = [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/userinfo.email'
+      ];
 
-    res.json({ url });
+      const url = oauth2Client.generateAuthUrl({
+        access_type: 'offline', // CRITICAL for refresh token
+        scope: scopes,
+        state: state,
+        prompt: 'consent' // Force consent to ensure refresh token is returned
+      });
+
+      res.json({ url });
+    } catch (error) {
+      console.error("Error generating auth url", error);
+      res.status(500).json({ message: "Failed to generate auth url" });
+    }
   });
 
   // 2. Callback Handler

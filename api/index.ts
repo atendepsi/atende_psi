@@ -1,4 +1,4 @@
-import { app, setupServer } from "../server/index";
+import { app, setupServer } from "../server/index.js";
 
 // Initialize the server logic
 // We use a promise to ensure it only runs once
