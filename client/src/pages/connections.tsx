@@ -7,6 +7,12 @@ import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Sm
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ConnectionsPage() {
   const { user } = useAuth();
@@ -17,9 +23,21 @@ export default function ConnectionsPage() {
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [calendarStatus, setCalendarStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
+  const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+
   useEffect(() => {
     fetchConnections();
   }, [user]);
+
+  useEffect(() => {
+    if (whatsappToken) {
+      checkWhatsappStatus();
+      // Poll status every 10 seconds if disconnected? Or just check once?
+      // For now, let's just check once on load.
+    }
+  }, [whatsappToken]);
 
   const fetchConnections = async () => {
     if (!user) return;
@@ -27,7 +45,7 @@ export default function ConnectionsPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('whatsapp_status, calendar_status')
+        .select('whatsapp_status, calendar_status, whatsapp_token, ai_phone')
         .eq('id', user.id)
         .single();
 
@@ -36,6 +54,8 @@ export default function ConnectionsPage() {
       if (data) {
         setWhatsappStatus(data.whatsapp_status as any || 'disconnected');
         setCalendarStatus(data.calendar_status as any || 'disconnected');
+        setWhatsappToken(data.whatsapp_token);
+        setPhone(data.ai_phone);
       }
     } catch (error) {
       console.error("Error fetching connections:", error);
@@ -44,18 +64,98 @@ export default function ConnectionsPage() {
     }
   };
 
+  const checkWhatsappStatus = async () => {
+    if (!whatsappToken) return;
+    try {
+      const res = await fetch(`/api/integrations/whatsapp/status?token=${whatsappToken}`);
+      const data = await res.json();
+
+      if (data && data.instance) {
+        if (data.instance.status === 'connected') {
+          setWhatsappStatus('connected');
+          // Update Supabase if needed to keep in sync
+          await supabase.from('profiles').update({ whatsapp_status: 'connected' }).eq('id', user!.id);
+        } else {
+          setWhatsappStatus('disconnected');
+          await supabase.from('profiles').update({ whatsapp_status: 'disconnected' }).eq('id', user!.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error checking WhatsApp status:", error);
+    }
+  };
+
+  const handleConnectWhatsapp = async () => {
+    if (!whatsappToken) {
+      toast({ title: "Erro de configuração", description: "Token do WhatsApp não encontrado.", variant: "destructive" });
+      return;
+    }
+    setProcessing('whatsapp');
+    try {
+      const res = await fetch('/api/integrations/whatsapp/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: whatsappToken, phone: phone || "" })
+      });
+      const data = await res.json();
+
+      if (data.instance && data.instance.status === 'connected') {
+        setWhatsappStatus('connected');
+        toast({ title: "Já conectado!", className: "bg-green-600 text-white" });
+      } else if (data.instance && data.instance.qrcode) {
+        setQrCode(data.instance.qrcode);
+      } else {
+        toast({ title: "Erro ao conectar", description: "Não foi possível obter o QR Code.", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("Error connecting WhatsApp:", error);
+      toast({ title: "Erro ao conectar", description: "Falha na comunicação com API.", variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleDisconnectWhatsapp = async () => {
+    if (!whatsappToken) return;
+    setProcessing('whatsapp');
+    try {
+      const res = await fetch('/api/integrations/whatsapp/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: whatsappToken })
+      });
+      const data = await res.json();
+      // API indicates success or if data.instance exists usually means handled
+      setWhatsappStatus('disconnected');
+      await supabase.from('profiles').update({ whatsapp_status: 'disconnected' }).eq('id', user!.id);
+
+      toast({ title: "Desconectado.", description: "WhatsApp desconectado com sucesso." });
+    } catch (error) {
+      console.error("Error disconnecting WhatsApp:", error);
+      toast({ title: "Erro ao desconectar", variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const handleToggle = async (type: 'whatsapp' | 'calendar', action: 'connect' | 'disconnect') => {
+    if (type === 'whatsapp') {
+      if (action === 'connect') {
+        await handleConnectWhatsapp();
+      } else {
+        await handleDisconnectWhatsapp();
+      }
+      return;
+    }
+
+    // Existing Calendar Logic (Mocked for now as per original code, or untouched)
     if (!user) return;
     setProcessing(type);
-
-    // Simulate API delay for realism
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1000)); // Simulate delay
 
     try {
       const newStatus = action === 'connect' ? 'connected' : 'disconnected';
-      const updateData = type === 'whatsapp'
-        ? { whatsapp_status: newStatus }
-        : { calendar_status: newStatus };
+      const updateData = { calendar_status: newStatus };
 
       const { error } = await supabase
         .from('profiles')
@@ -63,15 +163,11 @@ export default function ConnectionsPage() {
         .eq('id', user.id);
 
       if (error) throw error;
-
-      if (type === 'whatsapp') setWhatsappStatus(newStatus);
-      else setCalendarStatus(newStatus);
-
+      setCalendarStatus(newStatus);
       toast({
         title: action === 'connect' ? "Conectado com sucesso!" : "Desconectado.",
         className: action === 'connect' ? "bg-green-600 text-white" : ""
       });
-
     } catch (error) {
       console.error("Error updating connection:", error);
       toast({ title: "Erro na conexão.", variant: "destructive" });
@@ -217,6 +313,25 @@ export default function ConnectionsPage() {
           </div>
 
         </div>
+
+        <Dialog open={!!qrCode} onOpenChange={(open) => !open && setQrCode(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Escanear QR Code</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center justify-center p-6 space-y-4">
+              {qrCode && (
+                <div className="bg-white p-2 rounded-lg border">
+                  <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64 object-contain" />
+                </div>
+              )}
+              <p className="text-sm text-center text-muted-foreground">
+                Abra o WhatsApp no seu celular, vá em Aparelhos Conectados {'>'} Conectar um aparelho e escaneie o código acima.
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </AtendePsiShell>
   );

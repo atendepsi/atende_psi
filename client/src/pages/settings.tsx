@@ -10,9 +10,11 @@ import { Plus, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { signOut } = useAuth();
   const [loading, setLoading] = React.useState(true);
   const [userId, setUserId] = React.useState<string | null>(null);
 
@@ -47,7 +49,7 @@ export default function SettingsPage() {
         if (data) {
           setAgentName(data.ai_name || "Sofia");
           setTone(data.ai_tone || "Objetiva");
-          setPhone(data.phone || "");
+          setPhone(data.ai_phone || "");
           setRestrictions(data.ai_restrictions || []);
           // Note: aiOn status isn't in profiles yet, keeping local or assume active
         }
@@ -78,7 +80,7 @@ export default function SettingsPage() {
         id: userId,
         ai_name: agentName,
         ai_tone: tone,
-        phone: phone,
+        ai_phone: phone,
         ai_restrictions: restrictions,
         updated_at: new Date().toISOString(),
       };
@@ -210,7 +212,11 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex justify-between items-center pt-8 border-t border-border/50">
-            <Button variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2">
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
+              onClick={() => signOut()}
+            >
               <LogOut className="h-4 w-4" />
               Sair da conta
             </Button>
