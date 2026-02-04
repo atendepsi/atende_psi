@@ -4,7 +4,7 @@ import { AtendePsiShell } from "@/components/atendepsi-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, X, LogOut, Calendar, Check, ExternalLink } from "lucide-react";
+import { Plus, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -21,67 +21,6 @@ export default function SettingsPage() {
 
   const [restrictions, setRestrictions] = React.useState<string[]>([]); // Initialize empty
   const [newRestriction, setNewRestriction] = React.useState("");
-
-  const [googleStatus, setGoogleStatus] = React.useState<{ connected: boolean, email?: string } | null>(null);
-
-  React.useEffect(() => {
-    fetchProfile();
-    fetchGoogleStatus();
-    checkUrlParams();
-  }, []);
-
-  const checkUrlParams = () => {
-    const params = new URLSearchParams(window.location.search);
-    const googleConnected = params.get("google_connected");
-    const error = params.get("error");
-
-    if (googleConnected === "true") {
-      toast({
-        title: "Conectado!",
-        description: "Google Calendar conectado com sucesso.",
-        className: "bg-green-600 text-white border-none",
-      });
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (googleConnected === "false") {
-      toast({
-        title: "Erro na conexão",
-        description: error || "Não foi possível conectar ao Google Calendar.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const fetchGoogleStatus = async () => {
-    if (!userId) return;
-    try {
-      const res = await fetch(`/api/integrations/google/status?userId=${userId}`);
-      const data = await res.json();
-      setGoogleStatus(data);
-    } catch (error) {
-      console.error("Failed to fetch google status", error);
-    }
-  };
-
-  const handleGoogleConnect = async () => {
-    if (!userId) {
-      toast({ title: "Erro", description: "Usuário não identificado", variant: "destructive" });
-      return;
-    }
-    try {
-      const res = await fetch(`/api/auth/google?userId=${userId}`);
-      const { url } = await res.json();
-      if (url) {
-        window.location.href = url;
-      }
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Falha ao iniciar conexão com Google.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const fetchProfile = async () => {
     try {
@@ -112,6 +51,10 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    fetchProfile();
+  }, []);
 
   const addRestriction = () => {
     if (newRestriction.trim()) {
@@ -234,47 +177,6 @@ export default function SettingsPage() {
               <Button onClick={addRestriction} size="icon" className="h-9 w-9 rounded-lg shrink-0 bg-muted hover:bg-muted/80 text-foreground">
                 <Plus className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
-
-          {/* Integrations Section */}
-          <div className="ap-card rounded-2xl p-5 bg-card/50 border border-border/60 shadow-sm">
-            <h2 className="text-lg font-semibold tracking-tight mb-3">Integrações</h2>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/40">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center border border-border/20 shadow-sm">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium">Google Calendar</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {googleStatus?.connected
-                      ? `Conectado como ${googleStatus.email}`
-                      : "Permitir que a IA agende reuniões"
-                    }
-                  </p>
-                </div>
-              </div>
-
-              {googleStatus?.connected ? (
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-500/10 text-green-600 text-xs font-medium border border-green-500/20">
-                    <Check className="h-3 w-3" />
-                    Ativo
-                  </span>
-                </div>
-              ) : (
-                <Button
-                  onClick={handleGoogleConnect}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 h-9 text-xs"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Conectar
-                </Button>
-              )}
             </div>
           </div>
 

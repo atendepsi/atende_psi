@@ -161,6 +161,7 @@ export async function registerRoutes(
   // We also keep a standard api route just in case
   const handleGoogleCallback = async (req: any, res: any) => {
     const { code, state } = req.query;
+    console.log("Google Integration Callback Hit. Code Present:", !!code, "State:", state);
 
     if (!code) {
       return res.status(400).send("No code provided");
@@ -200,10 +201,14 @@ export async function registerRoutes(
 
       // Redirect back to frontend
       // Assuming frontend matches backend host for dev
-      res.redirect("/settings?google_connected=true");
-    } catch (error) {
-      console.error("Google Auth Error:", error);
-      res.redirect("/settings?google_connected=false&error=auth_failed");
+      res.redirect("/connections?google_connected=true");
+    } catch (error: any) {
+      console.error("Google Auth Error Full:", error);
+      console.error("Google Auth Error Message:", error?.message);
+      if (error.response) {
+        console.error("Google Auth Error Response:", JSON.stringify(error.response.data));
+      }
+      res.redirect(`/connections?google_connected=false&error=auth_failed_${encodeURIComponent(error.message || "unknown")}`);
     }
   };
 

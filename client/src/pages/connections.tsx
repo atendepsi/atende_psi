@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Smartphone } from "lucide-react";
+import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Smartphone, ExternalLink } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,8 @@ export default function ConnectionsPage() {
   const [dataPhone, setDataPhone] = useState<string | null>(null); // Phone saved in DB
   const [qrCode, setQrCode] = useState<string | null>(null);
 
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean, email?: string } | null>(null);
+
   // Profile data for API
   const [fullName, setFullName] = useState<string>("");
   const [cpf, setCpf] = useState<string>("");
@@ -49,6 +51,13 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     fetchConnections();
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchGoogleStatus();
+      checkUrlParams();
+    }
   }, [user]);
 
   useEffect(() => {
@@ -72,8 +81,7 @@ export default function ConnectionsPage() {
       if (data) {
         // Default to disconnected until verified
         setWhatsappStatus('disconnected');
-        // No calendar_status column
-        setCalendarStatus('disconnected');
+
         setWhatsappToken(data.whatsapp_token);
         setPhone(data.ai_phone);
         setDataPhone(data.ai_phone);
@@ -109,6 +117,71 @@ export default function ConnectionsPage() {
       console.error("Error checking WhatsApp status:", error);
     }
   };
+
+  // Google Calendar Logic
+  const checkUrlParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    const googleConnected = params.get("google_connected");
+    const error = params.get("error");
+
+    if (googleConnected === "true") {
+      toast({
+        title: "Conectado!",
+        description: "Google Calendar conectado com sucesso.",
+        className: "bg-green-600 text-white border-none",
+      });
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      fetchGoogleStatus(); // Refresh status
+    } else if (googleConnected === "false") {
+      toast({
+        title: "Erro na conexão",
+        description: error || "Não foi possível conectar ao Google Calendar.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchGoogleStatus = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/integrations/google/status?userId=${user.id}`);
+      const data = await res.json();
+      setGoogleStatus(data);
+      if (data.connected) {
+        setCalendarStatus('connected');
+      } else {
+        setCalendarStatus('disconnected');
+      }
+    } catch (error) {
+      console.error("Failed to fetch google status", error);
+    }
+  };
+
+  const handleGoogleConnect = async () => {
+    if (!user) {
+      toast({ title: "Erro", description: "Usuário não identificado", variant: "destructive" });
+      return;
+    }
+    setProcessing('calendar');
+    try {
+      const res = await fetch(`/api/auth/google?userId=${user.id}`);
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No URL returned");
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Falha ao iniciar conexão com Google.",
+        variant: "destructive",
+      });
+      setProcessing(null);
+    }
+  };
+
 
   const handleSaveInstance = async () => {
     if (!phone) return;
@@ -313,28 +386,21 @@ export default function ConnectionsPage() {
       return;
     }
 
-    // Existing Calendar Logic
-    if (!user) return;
-    setProcessing(type);
-    await new Promise(r => setTimeout(r, 1000)); // Simulate delay
-
-    try {
-      const newStatus = action === 'connect' ? 'connected' : 'disconnected';
-      // No column 'calendar_status' in DB
-      // const updateData = { calendar_status: newStatus };
-      // const { error } = await supabase.from('profiles').update(updateData).eq('id', user.id);
-      // if (error) throw error;
-
-      setCalendarStatus(newStatus);
-      toast({
-        title: action === 'connect' ? "Conectado com sucesso!" : "Desconectado.",
-        className: action === 'connect' ? "bg-green-600 text-white" : ""
-      });
-    } catch (error) {
-      console.error("Error updating connection:", error);
-      toast({ title: "Erro na conexão.", variant: "destructive" });
-    } finally {
-      setProcessing(null);
+    // Google Logic
+    if (action === 'connect') {
+      handleGoogleConnect();
+    } else {
+      // Disconnect Google (Currently manual DB clear or re-auth, but we can assume simple UI state reset or implementation of disconnect api soon)
+      // For now, let's just show a toast that disconnect is not fully implemented in UI or implement a disconnect endpoint?
+      // Let's implement a disconnect call if we have time, but strictly following the prompt, we just move UI.
+      // Actually, we should probably implement a disconnect route or just clear local state?
+      // The user asked to move functionality. Settings page didn't have disconnect logic beyond visual.
+      // But settings had a "Connected" state.
+      // Let's implement a simple disconnect by clearing the token?
+      // I don't have a disconnect endpoint yet in routes.ts for Google.
+      // I will just show toast "Desconectar via Google Account Permissions" for now or just reset local state to detached?
+      // User asked to "move" it.
+      toast({ title: "Desconexão", description: "Para desconectar, remova o acesso em sua conta Google." });
     }
   };
 
@@ -482,7 +548,10 @@ export default function ConnectionsPage() {
                     )}
                   </div>
                   <p className="text-muted-foreground text-base max-w-md leading-relaxed">
-                    Conecte sua agenda para que a IA possa consultar horários livres e agendar consultas automaticamente.
+                    {googleStatus?.connected
+                      ? `Conectado como ${googleStatus.email}`
+                      : "Conecte sua agenda para que a IA possa consultar horários livres e agendar consultas automaticamente."
+                    }
                   </p>
                   {calendarStatus !== 'connected' && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium pt-2">
