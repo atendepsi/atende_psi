@@ -12,6 +12,7 @@ import ConnectionsPage from "./pages/connections";
 import MemoryPage from "./pages/memory";
 import SettingsPage from "./pages/settings";
 import AuthPage from "./pages/auth";
+import ActivatePage from "./pages/activate";
 import NotFound from "./pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -28,6 +29,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/activate" component={ActivatePage} />
       <Route path="/">
         <ProtectedRoute component={DashboardPage} />
       </Route>
