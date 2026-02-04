@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { registerRoutes } from "./routes.js";
+import { serveStatic } from "./static.js";
 import { createServer } from "http";
 
 const app = express();
@@ -77,7 +77,7 @@ export async function setupServer() {
   } else {
     // Basic vite setup for dev
     // In Vercel dev, this might be tricky, but for 'npm run dev' it works
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   }
 }
