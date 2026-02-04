@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Memory, type InsertMemory, type Settings, type InsertSettings } from "@shared/schema";
+import { type User, type InsertUser, type Memory, type InsertMemory, type Settings, type InsertSettings, type GoogleToken, type InsertGoogleToken } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -13,16 +13,21 @@ export interface IStorage {
 
   getSettings(): Promise<Settings>;
   updateSettings(settings: Partial<InsertSettings>): Promise<Settings>;
+
+  storeGoogleToken(token: InsertGoogleToken): Promise<GoogleToken>;
+  getGoogleToken(userId: string): Promise<GoogleToken | undefined>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private memories: Map<string, Memory>;
+  private googleTokens: Map<string, GoogleToken>; // Map<userId, GoogleToken> - Simplified for 1:1 relation per user
   private settings: Settings;
 
   constructor() {
     this.users = new Map();
     this.memories = new Map();
+    this.googleTokens = new Map();
     this.settings = {
       id: "default",
       agentName: "Sofia",
@@ -87,6 +92,24 @@ export class MemStorage implements IStorage {
   async updateSettings(settingsUpdate: Partial<InsertSettings>): Promise<Settings> {
     this.settings = { ...this.settings, ...settingsUpdate };
     return this.settings;
+  }
+
+  async storeGoogleToken(insertToken: InsertGoogleToken): Promise<GoogleToken> {
+    const id = randomUUID();
+    const token: GoogleToken = {
+      ...insertToken,
+      expiresIn: insertToken.expiresIn ?? null,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    // Store by userId for easy retrieval. If we wanted multiple accounts per user, we'd need a different structure.
+    // For now, assuming one Google account per user.
+    this.googleTokens.set(insertToken.userId, token);
+    return token;
+  }
+
+  async getGoogleToken(userId: string): Promise<GoogleToken | undefined> {
+    return this.googleTokens.get(userId);
   }
 }
 

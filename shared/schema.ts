@@ -48,3 +48,22 @@ export const settings = pgTable("settings", {
 export const insertSettingsSchema = createInsertSchema(settings).omit({ id: true });
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 export type Settings = typeof settings.$inferSelect;
+
+export const googleTokens = pgTable("google_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // Intentionally not a foreign key for now if users table is not strictly managed or if we want flexibility
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  email: text("email").notNull(),
+  scope: text("scope").notNull(),
+  expiresIn: text("expires_in"), // Storing as text or number depending on provider, text is safer for varying formats
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertGoogleTokenSchema = createInsertSchema(googleTokens).omit({
+  id: true,
+  createdAt: true
+});
+
+export type InsertGoogleToken = z.infer<typeof insertGoogleTokenSchema>;
+export type GoogleToken = typeof googleTokens.$inferSelect;
