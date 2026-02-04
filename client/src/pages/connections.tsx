@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { AtendePsiShell } from "@/components/atendepsi-shell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Smartphone } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +16,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Helper to format phone number as (DDD) 9 9999-9999
+const formatPhoneNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  // Limit to 11 chars (2 DDD + 9 numeric)
+  const limited = digits.slice(0, 11);
+
+  if (limited.length <= 2) return limited;
+  if (limited.length <= 3) return `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+  if (limited.length <= 7) return `(${limited.slice(0, 2)}) ${limited.slice(2, 3)} ${limited.slice(3)}`;
+  return `(${limited.slice(0, 2)}) ${limited.slice(2, 3)} ${limited.slice(3, 7)}-${limited.slice(7)}`;
+};
+
 export default function ConnectionsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -25,7 +39,13 @@ export default function ConnectionsPage() {
 
   const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
+  const [dataPhone, setDataPhone] = useState<string | null>(null); // Phone saved in DB
   const [qrCode, setQrCode] = useState<string | null>(null);
+
+  // Profile data for API
+  const [fullName, setFullName] = useState<string>("");
+  const [cpf, setCpf] = useState<string>("");
+  const [contato, setContato] = useState<string>("");
 
   useEffect(() => {
     fetchConnections();
@@ -34,8 +54,6 @@ export default function ConnectionsPage() {
   useEffect(() => {
     if (whatsappToken) {
       checkWhatsappStatus();
-      // Poll status every 10 seconds if disconnected? Or just check once?
-      // For now, let's just check once on load.
     }
   }, [whatsappToken]);
 
@@ -45,17 +63,24 @@ export default function ConnectionsPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('whatsapp_status, calendar_status, whatsapp_token, ai_phone')
+        .select('whatsapp_token, ai_phone, full_name, cpf, contato')
         .eq('id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        setWhatsappStatus(data.whatsapp_status as any || 'disconnected');
-        setCalendarStatus(data.calendar_status as any || 'disconnected');
+        // Default to disconnected until verified
+        setWhatsappStatus('disconnected');
+        // No calendar_status column
+        setCalendarStatus('disconnected');
         setWhatsappToken(data.whatsapp_token);
         setPhone(data.ai_phone);
+        setDataPhone(data.ai_phone);
+
+        setFullName(data.full_name || "");
+        setCpf(data.cpf || "");
+        setContato(data.contato || "");
       }
     } catch (error) {
       console.error("Error fetching connections:", error);
@@ -67,21 +92,90 @@ export default function ConnectionsPage() {
   const checkWhatsappStatus = async () => {
     if (!whatsappToken) return;
     try {
-      const res = await fetch(`/api/integrations/whatsapp/status?token=${whatsappToken}`);
+      const res = await fetch('https://atendepsi.uazapi.com/instance/status', {
+        headers: {
+          'Accept': 'application/json',
+          'token': whatsappToken
+        }
+      });
       const data = await res.json();
 
-      if (data && data.instance) {
-        if (data.instance.status === 'connected') {
-          setWhatsappStatus('connected');
-          // Update Supabase if needed to keep in sync
-          await supabase.from('profiles').update({ whatsapp_status: 'connected' }).eq('id', user!.id);
-        } else {
-          setWhatsappStatus('disconnected');
-          await supabase.from('profiles').update({ whatsapp_status: 'disconnected' }).eq('id', user!.id);
-        }
+      if (data && data.instance && data.instance.status === 'connected') {
+        setWhatsappStatus('connected');
+      } else {
+        setWhatsappStatus('disconnected');
       }
     } catch (error) {
       console.error("Error checking WhatsApp status:", error);
+    }
+  };
+
+  const handleSaveInstance = async () => {
+    if (!phone) return;
+    setProcessing('save_instance');
+    try {
+      // 1. Call external API to init instance FIRST (Strict Order)
+      // Ensure we have a valid name. If fullName is empty, use a fallback.
+      const safeName = (fullName && fullName.trim() !== "") ? fullName : `Cliente ${phone}`;
+
+      const response = await fetch('https://atendepsi.uazapi.com/instance/init', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'admintoken': 'NfKtuDQbRoyrBFuw5gxxWNtLzJey4kA8eewgzO4VwOBgpDpYdK'
+        },
+        body: JSON.stringify({
+          name: safeName,
+          instanceName: safeName, // Sending both to satisfy "Missing Name or instanceName"
+          systemName: 'apilocal',
+          adminField01: cpf,
+          adminField02: contato,
+          fingerprintProfile: 'chrome',
+          browser: 'chrome'
+        })
+      });
+
+      if (!response.ok) {
+        // Try to read error body
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro na API: ${response.statusText}`);
+      }
+
+      const apiData = await response.json();
+
+      // 2. Extract token from response
+      // User said "pegar o 'token' retornado", so we look for token/hash/key
+      const newToken = apiData.token || apiData.hash || apiData.key;
+
+      if (!newToken) {
+        console.warn("No token found in response:", apiData);
+        throw new Error("API não retornou um token válido.");
+      }
+
+      // 3. Save Phone AND Token to Supabase
+      // Only now do we update the database
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          ai_phone: phone,
+          whatsapp_token: newToken
+        })
+        .eq('id', user!.id);
+
+      if (updateError) throw updateError;
+
+      // 4. Update local state to Lock UI and show Connect button
+      setWhatsappToken(newToken);
+      setDataPhone(phone);
+
+      toast({ title: "Instância criada", description: "Instância iniciada e token salvo. Agora conecte o WhatsApp." });
+
+    } catch (error: any) {
+      console.error(error);
+      toast({ title: "Erro ao salvar", description: error.message || "Falha ao criar instância.", variant: "destructive" });
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -90,14 +184,44 @@ export default function ConnectionsPage() {
       toast({ title: "Erro de configuração", description: "Token do WhatsApp não encontrado.", variant: "destructive" });
       return;
     }
+
     setProcessing('whatsapp');
+
+    const tryConnect = async (attemptsLeft: number): Promise<any> => {
+      try {
+        const res = await fetch('https://atendepsi.uazapi.com/instance/connect', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'token': whatsappToken
+          },
+          body: JSON.stringify({ phone: dataPhone || phone })
+        });
+
+        if (!res.ok) throw new Error(`Erro API Connect: ${res.statusText}`);
+        const data = await res.json();
+
+        // Success conditions
+        if (data.instance && (data.instance.status === 'connected' || data.instance.qrcode)) {
+          return data;
+        }
+
+        // Retry if empty
+        if (attemptsLeft > 0) {
+          console.log(`QR Code vazio, tentando novamente... (${attemptsLeft} restantes)`);
+          await new Promise(r => setTimeout(r, 2000));
+          return tryConnect(attemptsLeft - 1);
+        }
+
+        return data;
+      } catch (e) {
+        throw e;
+      }
+    };
+
     try {
-      const res = await fetch('/api/integrations/whatsapp/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: whatsappToken, phone: phone || "" })
-      });
-      const data = await res.json();
+      const data = await tryConnect(2); // Try up to 3 times total
 
       if (data.instance && data.instance.status === 'connected') {
         setWhatsappStatus('connected');
@@ -105,7 +229,7 @@ export default function ConnectionsPage() {
       } else if (data.instance && data.instance.qrcode) {
         setQrCode(data.instance.qrcode);
       } else {
-        toast({ title: "Erro ao conectar", description: "Não foi possível obter o QR Code.", variant: "destructive" });
+        toast({ title: "Erro ao conectar", description: "Não foi possível obter o QR Code. Tente novamente.", variant: "destructive" });
       }
     } catch (error) {
       console.error("Error connecting WhatsApp:", error);
@@ -124,15 +248,56 @@ export default function ConnectionsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: whatsappToken })
       });
-      const data = await res.json();
       // API indicates success or if data.instance exists usually means handled
       setWhatsappStatus('disconnected');
-      await supabase.from('profiles').update({ whatsapp_status: 'disconnected' }).eq('id', user!.id);
+      // No column 'whatsapp_status' in DB
+      // await supabase.from('profiles').update({ whatsapp_status: 'disconnected' }).eq('id', user!.id);
 
       toast({ title: "Desconectado.", description: "WhatsApp desconectado com sucesso." });
     } catch (error) {
       console.error("Error disconnecting WhatsApp:", error);
       toast({ title: "Erro ao desconectar", variant: "destructive" });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleDeleteInstance = async () => {
+    if (!whatsappToken) return;
+    setProcessing('delete_instance');
+    try {
+      // External API DELETE
+      const res = await fetch('https://atendepsi.uazapi.com/instance', {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'token': whatsappToken
+        }
+      });
+
+      // We log error but proceed to clear local/db state to avoid lock-in
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Delete instance API error", err);
+      }
+
+      // Clear DB
+      await supabase.from('profiles').update({
+        whatsapp_token: null,
+        ai_phone: null
+      }).eq('id', user!.id);
+
+      // Clear State
+      setWhatsappToken(null);
+      setDataPhone(null);
+      setPhone(null);
+      setWhatsappStatus('disconnected');
+
+      toast({ title: "Instância excluída", description: "Instância removida com sucesso." });
+
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Erro", description: "Falha ao excluir instância.", variant: "destructive" });
     } finally {
       setProcessing(null);
     }
@@ -148,21 +313,18 @@ export default function ConnectionsPage() {
       return;
     }
 
-    // Existing Calendar Logic (Mocked for now as per original code, or untouched)
+    // Existing Calendar Logic
     if (!user) return;
     setProcessing(type);
     await new Promise(r => setTimeout(r, 1000)); // Simulate delay
 
     try {
       const newStatus = action === 'connect' ? 'connected' : 'disconnected';
-      const updateData = { calendar_status: newStatus };
+      // No column 'calendar_status' in DB
+      // const updateData = { calendar_status: newStatus };
+      // const { error } = await supabase.from('profiles').update(updateData).eq('id', user.id);
+      // if (error) throw error;
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
-
-      if (error) throw error;
       setCalendarStatus(newStatus);
       toast({
         title: action === 'connect' ? "Conectado com sucesso!" : "Desconectado.",
@@ -198,12 +360,12 @@ export default function ConnectionsPage() {
             </div>
 
             <div className="relative z-10 flex flex-col md:flex-row gap-8 items-start md:items-center justify-between">
-              <div className="flex items-start gap-5">
+              <div className="flex items-start gap-5 flex-1">
                 <div className={`h-16 w-16 rounded-2xl flex items-center justify-center shrink-0 border transition-colors ${whatsappStatus === 'connected' ? 'bg-[#006f9a]/10 border-[#006f9a]/20' : 'bg-muted border-border'
                   }`}>
                   <MessageCircle className={`h-8 w-8 ${whatsappStatus === 'connected' ? 'text-[#006f9a]' : 'text-muted-foreground'}`} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-3 w-full max-w-lg">
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-bold tracking-tight text-foreground">WhatsApp Business</h2>
                     {whatsappStatus === 'connected' ? (
@@ -212,13 +374,34 @@ export default function ConnectionsPage() {
                       <Badge variant="outline" className="text-muted-foreground">Desconectado</Badge>
                     )}
                   </div>
-                  <p className="text-muted-foreground text-base max-w-md leading-relaxed">
-                    {whatsappStatus === 'connected'
-                      ? "Sua assistente está ativa e respondendo mensagens automaticamente."
-                      : "Conecte para que a IA possa responder seus pacientes automaticamente."}
-                  </p>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Número do WhatsApp</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-muted-foreground font-medium">+55</span>
+                      </div>
+                      <Input
+                        value={formatPhoneNumber(phone || "")}
+                        onChange={(e) => {
+                          // Keep only digits
+                          const raw = e.target.value.replace(/\D/g, "");
+                          setPhone(raw);
+                        }}
+                        placeholder="(DDD) 9 9999-9999"
+                        disabled={!!dataPhone || whatsappStatus === 'connected'}
+                        className="bg-background/80 pl-12 font-medium"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {whatsappStatus === 'connected'
+                        ? "Número conectado e vinculado à instância."
+                        : "Insira o DDD e número."}
+                    </p>
+                  </div>
+
                   {whatsappStatus === 'connected' && (
-                    <div className="flex items-center gap-2 text-sm text-[#006f9a] font-medium pt-2">
+                    <div className="flex items-center gap-2 text-sm text-[#006f9a] font-medium pt-1">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Sincronização em tempo real</span>
                     </div>
@@ -226,30 +409,52 @@ export default function ConnectionsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 w-full md:w-auto">
+              <div className="flex flex-col gap-3 w-full md:w-auto min-w-[200px]">
                 {whatsappStatus === 'connected' ? (
                   <>
-                    <Button className="w-full md:w-auto rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold">
-                      Configurar
-                    </Button>
                     <Button
                       variant="ghost"
                       disabled={!!processing}
                       onClick={() => handleToggle('whatsapp', 'disconnect')}
-                      className="w-full md:w-auto rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      className="w-full rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     >
                       {processing === 'whatsapp' ? <Loader2 className="animate-spin" /> : "Desconectar"}
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    onClick={() => handleToggle('whatsapp', 'connect')}
-                    disabled={!!processing}
-                    className="w-full md:w-auto rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
-                  >
-                    {processing === 'whatsapp' ? <Loader2 className="animate-spin mr-2" /> : null}
-                    Conectar WhatsApp
-                  </Button>
+                  <>
+                    {!dataPhone ? (
+                      <Button
+                        onClick={handleSaveInstance}
+                        disabled={!!processing || !phone}
+                        className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
+                      >
+                        {processing === 'save_instance' ? <Loader2 className="animate-spin mr-2" /> : null}
+                        Salvar e Criar Instância
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col gap-2 w-full">
+                        <Button
+                          onClick={handleConnectWhatsapp}
+                          disabled={!!processing}
+                          className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
+                        >
+                          {processing === 'whatsapp' ? <Loader2 className="animate-spin mr-2" /> : null}
+                          Conectar WhatsApp
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!!processing}
+                          onClick={handleDeleteInstance}
+                          className="text-xs text-destructive hover:text-destructive/80"
+                        >
+                          {processing === 'delete_instance' ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : null}
+                          Excluir Instância
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

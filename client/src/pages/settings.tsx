@@ -1,11 +1,9 @@
 
 import * as React from "react";
-// React already imported or not needed as * import if handled by other imports
 import { AtendePsiShell } from "@/components/atendepsi-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Plus, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -18,10 +16,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = React.useState(true);
   const [userId, setUserId] = React.useState<string | null>(null);
 
-  const [aiOn, setAiOn] = React.useState(true);
   const [tone, setTone] = React.useState("Objetiva");
   const [agentName, setAgentName] = React.useState("Sofia");
-  const [phone, setPhone] = React.useState("");
+
   const [restrictions, setRestrictions] = React.useState<string[]>([]); // Initialize empty
   const [newRestriction, setNewRestriction] = React.useState("");
 
@@ -49,9 +46,7 @@ export default function SettingsPage() {
         if (data) {
           setAgentName(data.ai_name || "Sofia");
           setTone(data.ai_tone || "Objetiva");
-          setPhone(data.ai_phone || "");
           setRestrictions(data.ai_restrictions || []);
-          // Note: aiOn status isn't in profiles yet, keeping local or assume active
         }
       }
     } catch (error) {
@@ -80,7 +75,6 @@ export default function SettingsPage() {
         id: userId,
         ai_name: agentName,
         ai_tone: tone,
-        ai_phone: phone,
         ai_restrictions: restrictions,
         updated_at: new Date().toISOString(),
       };
@@ -118,21 +112,6 @@ export default function SettingsPage() {
       <div className="h-full overflow-y-auto flex-1 min-h-0 pb-1 pr-2">
         <div className="flex flex-col gap-3">
 
-          {/* Status Section - Compact */}
-          <div className="ap-card ap-noise rounded-2xl p-5 border border-border/60 shadow-sm">
-            <div className="flex flex-row items-center justify-between gap-4">
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold tracking-tight">Status da IA</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">Ativar ou pausar o piloto automático.</p>
-              </div>
-              <Switch
-                checked={aiOn}
-                onCheckedChange={setAiOn}
-                className="scale-110 data-[state=checked]:bg-[#006f9a]"
-              />
-            </div>
-          </div>
-
           {/* Profile Section - Compact */}
           <div className="ap-card rounded-2xl p-5 bg-card/50 border border-border/60 shadow-sm">
             <h2 className="text-lg font-semibold tracking-tight mb-3">Perfil do Agente</h2>
@@ -143,16 +122,6 @@ export default function SettingsPage() {
                 <Input
                   value={agentName}
                   onChange={(e) => setAgentName(e.target.value)}
-                  className="h-10 rounded-xl bg-muted/40 border-border/60 text-base"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Telefone (WhatsApp)</Label>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="ex: 5511999999999"
                   className="h-10 rounded-xl bg-muted/40 border-border/60 text-base"
                 />
               </div>
