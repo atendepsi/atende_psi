@@ -23,7 +23,7 @@ const OlaAnimation = ({ name }: { name: string }) => {
   }, []);
 
   const gradientStyle: React.CSSProperties = {
-    backgroundImage: `linear-gradient(90deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)) 50%, transparent 50%)`,
+    backgroundImage: `linear-gradient(90deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)) 45%, transparent 65%)`,
     backgroundSize: "200% 100%",
     backgroundPosition: revealed ? "0% 0" : "100% 0",
     WebkitBackgroundClip: "text",
@@ -31,7 +31,7 @@ const OlaAnimation = ({ name }: { name: string }) => {
     backgroundClip: "text",
     color: "transparent",
     opacity: revealed ? 1 : 0,
-    transition: "background-position 3.5s ease, opacity 3.5s ease",
+    transition: "background-position 4.0s ease-in-out, opacity 4.0s ease-in-out",
   };
 
   return (
