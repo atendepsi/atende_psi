@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Memory, type InsertMemory, type Settings, type InsertSettings, type GoogleToken, type InsertGoogleToken } from "@shared/schema";
+import { type User, type InsertUser, type Memory, type InsertMemory, type Settings, type InsertSettings, type GoogleToken, type InsertGoogleToken } from "../shared/schema.js";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
