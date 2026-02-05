@@ -119,17 +119,50 @@ export default function ConnectionsPage() {
   };
 
   // Google Calendar Logic
-  const checkUrlParams = () => {
+  const checkUrlParams = async () => {
     const params = new URLSearchParams(window.location.search);
     const googleConnected = params.get("google_connected");
     const error = params.get("error");
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const email = params.get("email");
 
     if (googleConnected === "true") {
-      toast({
-        title: "Conectado!",
-        description: "Google Calendar conectado com sucesso.",
-        className: "bg-green-600 text-white border-none",
-      });
+      if (accessToken && refreshToken && user) {
+        try {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              google_access_token: accessToken,
+              google_refresh_token: refreshToken,
+              google_email: email
+            })
+            .eq('id', user.id);
+
+          if (updateError) throw updateError;
+
+          toast({
+            title: "Conectado!",
+            description: "Google Calendar conectado e salvo com sucesso.",
+            className: "bg-green-600 text-white border-none",
+          });
+        } catch (e) {
+          console.error("Failed to save tokens frontend:", e);
+          toast({
+            title: "Erro ao salvar",
+            description: "Falha ao persistir conexão no banco de dados.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Fallback for just UI update if no tokens passed (legacy)
+        toast({
+          title: "Conectado!",
+          description: "Google Calendar conectado com sucesso.",
+          className: "bg-green-600 text-white border-none",
+        });
+      }
+
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
       fetchGoogleStatus(); // Refresh status
@@ -139,6 +172,14 @@ export default function ConnectionsPage() {
         description: error || "Não foi possível conectar ao Google Calendar.",
         variant: "destructive",
       });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (googleConnected === "partial") {
+      toast({
+        title: "Erro Parcial",
+        description: error || "Conectado mas falha ao salvar.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   };
 

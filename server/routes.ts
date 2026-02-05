@@ -217,53 +217,18 @@ export async function registerRoutes(
         console.warn("Missing access or refresh token in response");
       }
 
-      // Update profiles directly in Supabase using the Service Role Key (to bypass RLS if needed)
-      // or using the standard client if RLS allows.
-      // We assume process.env.SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY is available.
-      const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-      const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      // We cannot save to Supabase Backend without Service Role Key due to RLS.
+      // We will pass the tokens to the frontend via URL parameters, 
+      // where the authenticated user (client-side) can save them to their own profile.
 
-      if (sbUrl && sbKey) {
-        const { createClient } = await import("@supabase/supabase-js");
-        const supabaseAdmin = createClient(sbUrl, sbKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
-          }
-        });
+      const params = new URLSearchParams();
+      params.append("google_connected", "true");
+      params.append("access_token", tokens.access_token!);
+      params.append("refresh_token", tokens.refresh_token!);
+      params.append("email", userInfo.data.email!);
+      params.append("expiry_date", tokens.expiry_date ? tokens.expiry_date.toString() : "");
 
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({
-            google_access_token: tokens.access_token,
-            google_refresh_token: tokens.refresh_token,
-            google_email: userInfo.data.email
-          })
-          .eq('id', userId);
-
-        if (updateError) {
-          console.error("Failed to update Supabase profiles:", updateError);
-        } else {
-          console.log("Successfully updated Supabase profiles with Google tokens.");
-        }
-      } else {
-        console.warn("Missing Supabase credentials, skipping profile update.");
-      }
-
-      // Also keep local storage for now if used elsewhere, or just rely on Supabase.
-      // For api/integrations/google/status we might need to update that too to read from profiles.
-      // But let's keep storage sync for now to avoid breaking other routes until refactored.
-      await storage.storeGoogleToken({
-        userId: userId,
-        accessToken: tokens.access_token!,
-        refreshToken: tokens.refresh_token!,
-        email: userInfo.data.email!,
-        scope: tokens.scope!,
-        expiresIn: tokens.expiry_date ? tokens.expiry_date.toString() : null
-      });
-
-      // Redirect back to frontend
-      res.redirect("/connections?google_connected=true");
+      res.redirect(`/connections?${params.toString()}`);
     } catch (error: any) {
       console.error("Google Auth Error Full:", error);
       console.error("Google Auth Error Message:", error?.message);
