@@ -258,20 +258,57 @@ export async function registerRoutes(
     });
   });
 
+  // 3. Events API (Authenticated via Supabase JWT)
   app.get("/api/calendar/events", async (req, res) => {
-    const userId = "test-user-id"; // TODO: real auth
-    const token = await storage.getGoogleToken(userId);
-
-    if (!token) {
-      return res.status(401).json({ message: "Google Calendar not connected" });
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "Missing Authorization header" });
     }
 
     try {
-      oauth2Client.setCredentials({
-        access_token: token.accessToken,
-        refresh_token: token.refreshToken
+      // Use the client-side Anon Key for the backend to act on behalf of the user
+      // We assume VITE_SUPABASE_ANON_KEY is available or hardcoded in shared/schema if needed, 
+      // but usually it's best to grab from env.
+      const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+      if (!sbUrl || !sbKey) {
+        // Fallback if env vars are missing (development/local hardcoded check)
+        // The user mentioned keys aren't dynamic, so we might need to rely on what's available.
+        // Using the fallback from client/src/lib/supabase.ts if visible? No, can't import easily.
+        // We will proceed hoping envs are set or storage has it (but storage is memory).
+        return res.status(500).json({ message: "Server misconfiguration: Missing Supabase URL/Key" });
+      }
+
+      const { createClient } = await import("@supabase/supabase-js");
+
+      // Create a client scoped to the user's JWT
+      const supabaseScoped = createClient(sbUrl, sbKey, {
+        global: {
+          headers: {
+            Authorization: authHeader // Pass the Bearer token
+          }
+        }
       });
 
+      // Fetch user's profile to get tokens using RLS
+      const { data: profile, error } = await supabaseScoped
+        .from('profiles')
+        .select('google_access_token, google_refresh_token')
+        .single();
+
+      if (error || !profile || !profile.google_access_token || !profile.google_refresh_token) {
+        console.warn("Failed to fetch Google tokens from profile:", error);
+        return res.status(401).json({ message: "Google Calendar not connected or session expired" });
+      }
+
+      // Configure OAuth client
+      oauth2Client.setCredentials({
+        access_token: profile.google_access_token,
+        refresh_token: profile.google_refresh_token
+      });
+
+      // Fetch events
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
       const response = await calendar.events.list({
         calendarId: 'primary',
@@ -282,9 +319,15 @@ export async function registerRoutes(
       });
 
       res.json(response.data.items);
-    } catch (error) {
+
+    } catch (error: any) {
       console.error("Calendar API Error:", error);
-      res.status(500).json({ message: "Failed to fetch events" });
+      // Handle the case where the access token is expired and googleapis tried to refresh
+      if (error.code === 401) {
+        res.status(401).json({ message: "Authentication failed with Google", detail: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to fetch events", detail: error.message });
+      }
     }
   });
 
