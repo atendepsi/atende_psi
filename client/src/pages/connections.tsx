@@ -55,7 +55,7 @@ export default function ConnectionsPage() {
 
   useEffect(() => {
     if (user) {
-      fetchGoogleStatus();
+      // fetchGoogleStatus(); // Now handled in fetchConnections via Supabase
       checkUrlParams();
     }
   }, [user]);
@@ -72,16 +72,15 @@ export default function ConnectionsPage() {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('whatsapp_token, ai_phone, full_name, cpf, contato')
+        .select('whatsapp_token, ai_phone, full_name, cpf, contato, google_email, google_access_token')
         .eq('id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
-        // Default to disconnected until verified
-        setWhatsappStatus('disconnected');
-
+        // WhatsApp Logic
+        setWhatsappStatus('disconnected'); // Default to disconnected until verified
         setWhatsappToken(data.whatsapp_token);
         setPhone(data.ai_phone);
         setDataPhone(data.ai_phone);
@@ -89,6 +88,15 @@ export default function ConnectionsPage() {
         setFullName(data.full_name || "");
         setCpf(data.cpf || "");
         setContato(data.contato || "");
+
+        // Google Calendar Logic (Direct via Supabase)
+        if (data.google_email && data.google_access_token) {
+          setCalendarStatus('connected');
+          setGoogleStatus({ connected: true, email: data.google_email });
+        } else {
+          setCalendarStatus('disconnected');
+          setGoogleStatus({ connected: false });
+        }
       }
     } catch (error) {
       console.error("Error fetching connections:", error);
@@ -146,6 +154,10 @@ export default function ConnectionsPage() {
             description: "Google Calendar conectado e salvo com sucesso.",
             className: "bg-green-600 text-white border-none",
           });
+          // Update local state immediately
+          setCalendarStatus('connected');
+          setGoogleStatus({ connected: true, email: email || "" });
+
         } catch (e) {
           console.error("Failed to save tokens frontend:", e);
           toast({
@@ -161,11 +173,11 @@ export default function ConnectionsPage() {
           description: "Google Calendar conectado com sucesso.",
           className: "bg-green-600 text-white border-none",
         });
+        fetchConnections(); // Re-fetch to be sure
       }
 
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
-      fetchGoogleStatus(); // Refresh status
     } else if (googleConnected === "false") {
       toast({
         title: "Erro na conexão",
@@ -183,21 +195,22 @@ export default function ConnectionsPage() {
     }
   };
 
-  const fetchGoogleStatus = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`/api/integrations/google/status?userId=${user.id}`);
-      const data = await res.json();
-      setGoogleStatus(data);
-      if (data.connected) {
-        setCalendarStatus('connected');
-      } else {
-        setCalendarStatus('disconnected');
-      }
-    } catch (error) {
-      console.error("Failed to fetch google status", error);
-    }
-  };
+  // Deprecated: fetchGoogleStatus replaced by fetchConnections logic
+  // const fetchGoogleStatus = async () => {
+  //   if (!user) return;
+  //   try {
+  //     const res = await fetch(`/api/integrations/google/status?userId=${user.id}`);
+  //     const data = await res.json();
+  //     setGoogleStatus(data);
+  //     if (data.connected) {
+  //       setCalendarStatus('connected');
+  //     } else {
+  //       setCalendarStatus('disconnected');
+  //     }
+  //   } catch (error) {
+  //     console.error("Failed to fetch google status", error);
+  //   }
+  // };
 
   const handleGoogleConnect = async () => {
     if (!user) {
@@ -431,17 +444,44 @@ export default function ConnectionsPage() {
     if (action === 'connect') {
       handleGoogleConnect();
     } else {
-      // Disconnect Google (Currently manual DB clear or re-auth, but we can assume simple UI state reset or implementation of disconnect api soon)
-      // For now, let's just show a toast that disconnect is not fully implemented in UI or implement a disconnect endpoint?
-      // Let's implement a disconnect call if we have time, but strictly following the prompt, we just move UI.
-      // Actually, we should probably implement a disconnect route or just clear local state?
-      // The user asked to move functionality. Settings page didn't have disconnect logic beyond visual.
-      // But settings had a "Connected" state.
-      // Let's implement a simple disconnect by clearing the token?
-      // I don't have a disconnect endpoint yet in routes.ts for Google.
-      // I will just show toast "Desconectar via Google Account Permissions" for now or just reset local state to detached?
-      // User asked to "move" it.
-      toast({ title: "Desconexão", description: "Para desconectar, remova o acesso em sua conta Google." });
+      setProcessing('calendar');
+      try {
+        // 1. Try to revoke token on Google (Best effort)
+        // We need the access token. It's in the DB.
+        const { data } = await supabase
+          .from('profiles')
+          .select('google_access_token')
+          .eq('id', user!.id)
+          .single();
+
+        if (data?.google_access_token) {
+          await fetch(`https://oauth2.googleapis.com/revoke?token=${data.google_access_token}`, {
+            method: 'POST',
+            headers: {
+              'Content-type': 'application/x-www-form-urlencoded'
+            }
+          }).catch(err => console.warn("Revoke failed, continuing cleanup", err));
+        }
+
+        // 2. Clean Supabase
+        const { error } = await supabase.from('profiles').update({
+          google_access_token: null,
+          google_refresh_token: null,
+          google_email: null
+        }).eq('id', user!.id);
+
+        if (error) throw error;
+
+        setCalendarStatus('disconnected');
+        setGoogleStatus({ connected: false });
+        toast({ title: "Desconectado", description: "Google Agenda desconectado." });
+
+      } catch (error) {
+        console.error("Disconnect error:", error);
+        toast({ title: "Erro", description: "Falha ao desconectar.", variant: "destructive" });
+      } finally {
+        setProcessing(null);
+      }
     }
   };
 
