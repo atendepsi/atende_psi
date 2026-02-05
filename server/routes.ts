@@ -217,17 +217,52 @@ export async function registerRoutes(
         console.warn("Missing access or refresh token in response");
       }
 
+      // Update profiles directly in Supabase using the Service Role Key (to bypass RLS if needed)
+      // or using the standard client if RLS allows.
+      // We assume process.env.SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY is available.
+      const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+      if (sbUrl && sbKey) {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseAdmin = createClient(sbUrl, sbKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        });
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({
+            google_access_token: tokens.access_token,
+            google_refresh_token: tokens.refresh_token,
+            google_email: userInfo.data.email
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error("Failed to update Supabase profiles:", updateError);
+        } else {
+          console.log("Successfully updated Supabase profiles with Google tokens.");
+        }
+      } else {
+        console.warn("Missing Supabase credentials, skipping profile update.");
+      }
+
+      // Also keep local storage for now if used elsewhere, or just rely on Supabase.
+      // For api/integrations/google/status we might need to update that too to read from profiles.
+      // But let's keep storage sync for now to avoid breaking other routes until refactored.
       await storage.storeGoogleToken({
         userId: userId,
         accessToken: tokens.access_token!,
-        refreshToken: tokens.refresh_token!, // If undefined, we have a problem for offline access
+        refreshToken: tokens.refresh_token!,
         email: userInfo.data.email!,
         scope: tokens.scope!,
         expiresIn: tokens.expiry_date ? tokens.expiry_date.toString() : null
       });
 
       // Redirect back to frontend
-      // Assuming frontend matches backend host for dev
       res.redirect("/connections?google_connected=true");
     } catch (error: any) {
       console.error("Google Auth Error Full:", error);
