@@ -6,6 +6,10 @@
             "destination": "/api/index"
         },
         {
+            "source": "/rest/(.*)",
+            "destination": "/api/index"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
