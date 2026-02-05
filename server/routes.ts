@@ -130,7 +130,11 @@ export async function registerRoutes(
   let oauth2Client: any = null;
 
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
-    console.warn("Google Calendar Env Vars missing. Integration disabled.");
+    const missing = [];
+    if (!process.env.GOOGLE_CLIENT_ID) missing.push("GOOGLE_CLIENT_ID");
+    if (!process.env.GOOGLE_CLIENT_SECRET) missing.push("GOOGLE_CLIENT_SECRET");
+    if (!process.env.GOOGLE_REDIRECT_URI) missing.push("GOOGLE_REDIRECT_URI");
+    console.warn(`Google Calendar Env Vars missing: ${missing.join(", ")}. Integration disabled.`);
   } else {
     try {
       oauth2Client = new google.auth.OAuth2(
