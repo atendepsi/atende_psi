@@ -12,9 +12,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash2, Plus, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, Search, BookOpen } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -164,10 +165,40 @@ export default function MemoryPage() {
     >
       <div className="flex flex-col gap-6 h-full overflow-hidden pb-1">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
-          <div className="flex flex-col gap-1">
-            <div className="text-sm text-muted-foreground">
-              O que a IA sabe sobre seu negócio e como ela responde
-            </div>
+          <div className="flex flex-col gap-1 w-full max-w-3xl">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="how-it-works" className="border-0">
+                <AccordionTrigger className="w-full flex items-center gap-2 p-4 rounded-xl bg-[#006f9a]/10 hover:bg-[#006f9a]/20 text-[#006f9a] font-medium text-sm transition-all hover:no-underline [&[data-state=open]]:rounded-b-none">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Como funciona?
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground leading-relaxed space-y-4 pt-4">
+                  <p>
+                    Nesta aba, você cadastra perguntas e respostas estratégicas que servirão de base para todo o conhecimento da ferramenta. Imagine que a IA é uma secretária ou assistente clínica que acaba de ser contratada; a Aba de Memórias é onde você ensina a ela tudo o que ela precisa saber para representar o seu consultório com precisão.
+                  </p>
+
+                  <div className="space-y-2">
+                    <strong className="text-foreground block font-semibold">O que incluir nessa base de conhecimento?</strong>
+                    <p>Para que a IA seja realmente útil, você pode alimentar essa aba com:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li><strong>Informações do Negócio:</strong> Horários de atendimento, localização, valores de sessão e convênios aceitos.</li>
+                      <li><strong>Abordagem Terapêutica:</strong> Explicações sobre como você trabalha (ex: TCC, Psicanálise, Fenomenologia) para que a IA saiba explicar seu método aos pacientes.</li>
+                      <li><strong>Políticas de Cancelamento:</strong> Regras sobre faltas e reagendamentos.</li>
+                      <li><strong>Dúvidas Frequentes (FAQ):</strong> Respostas prontas para perguntas comuns que os pacientes costumam fazer antes da primeira sessão.</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <strong className="text-foreground block font-semibold">Por que isso é importante?</strong>
+                    <p>
+                      Diferente de um chat comum, uma IA com "memória" não inventa informações. Ela consulta essa base de dados antes de responder, garantindo que o atendimento seja personalizado, ético e totalmente alinhado à identidade do seu serviço.
+                    </p>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         </div>
 
@@ -218,9 +249,7 @@ export default function MemoryPage() {
               <div className="mt-2 text-sm leading-relaxed text-foreground/80" data-testid={`text-memory-a-${m.id}`}>
                 {m.resposta}
               </div>
-              <div className="mt-4 pt-4 border-t border-border/40 text-xs text-muted-foreground italic">
-                Isso ajuda a IA a responder pacientes do seu jeito.
-              </div>
+
             </div>
           ))}
           {filteredMemories.length === 0 && (

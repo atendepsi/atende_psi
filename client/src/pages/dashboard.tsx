@@ -77,42 +77,63 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1 min-h-0 pb-1">
 
           {/* Row 1: 4 KPIs */}
-          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
-            <div className="text-sm font-medium text-muted-foreground">Tempo médio</div>
-            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
-              {data.metrics.averageTime}
+          {/* Row 1: 3 KPIs (Equal Width) */}
+          <div className="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
+              <div className="text-sm font-medium text-muted-foreground">Tempo médio</div>
+              <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+                {data.metrics.averageTime}
+              </div>
+              <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                <span className={`font-medium flex items-center mr-1 ${data.metrics.averageTimeChange.trend === 'down' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <ArrowDownRight className="h-3 w-3 mr-0.5" /> {data.metrics.averageTimeChange.value}%
+                </span>
+                vs ontem
+              </div>
             </div>
-            <div className="mt-1 flex items-center text-xs text-muted-foreground">
-              <span className={`font-medium flex items-center mr-1 ${data.metrics.averageTimeChange.trend === 'down' ? 'text-emerald-600' : 'text-red-600'}`}>
-                <ArrowDownRight className="h-3 w-3 mr-0.5" /> {data.metrics.averageTimeChange.value}%
-              </span>
-              vs ontem
+
+            <div className="ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
+              <div className="text-sm font-medium text-muted-foreground">Mensagens</div>
+              <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+                {data.metrics.totalMessages}
+              </div>
+              <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                <span className={`font-medium flex items-center mr-1 ${data.metrics.totalMessagesChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.totalMessagesChange.value}%
+                </span>
+                vs ontem
+              </div>
+            </div>
+
+            <div className="ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+              <div className="text-sm font-medium text-muted-foreground">Autonomia IA</div>
+              <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
+                {data.metrics.aiAutonomy}
+              </div>
+              <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                <span className={`font-medium flex items-center mr-1 ${data.metrics.aiAutonomyChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.aiAutonomyChange.value}%
+                </span>
+                vs ontem
+              </div>
             </div>
           </div>
 
-          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-100">
-            <div className="text-sm font-medium text-muted-foreground">Mensagens</div>
-            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
-              {data.metrics.totalMessages}
-            </div>
-            <div className="mt-1 flex items-center text-xs text-muted-foreground">
-              <span className={`font-medium flex items-center mr-1 ${data.metrics.totalMessagesChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
-                <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.totalMessagesChange.value}%
-              </span>
-              vs ontem
-            </div>
+
+
+          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
+            <div className="text-sm font-medium text-muted-foreground">Agendamentos</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.appointments}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Hoje</div>
           </div>
 
           <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
-            <div className="text-sm font-medium text-muted-foreground">Autonomia IA</div>
-            <div className="mt-1 text-3xl font-bold tracking-tighter text-foreground/90">
-              {data.metrics.aiAutonomy}
-            </div>
-            <div className="mt-1 flex items-center text-xs text-muted-foreground">
-              <span className={`font-medium flex items-center mr-1 ${data.metrics.aiAutonomyChange.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
-                <ArrowUpRight className="h-3 w-3 mr-0.5" /> {data.metrics.aiAutonomyChange.value}%
-              </span>
-              vs ontem
+            <div className="text-sm font-medium text-muted-foreground">Remarcações</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.reschedules}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {data.metrics.appointments > 0
+                ? `${Math.round((data.metrics.reschedules / (data.metrics.appointments + data.metrics.reschedules + data.metrics.cancellations)) * 100)}% do total`
+                : '0% do total'}
             </div>
           </div>
 
@@ -123,29 +144,13 @@ export default function DashboardPage() {
           </div>
 
           <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
-            <div className="text-sm font-medium text-muted-foreground">Agendamentos</div>
-            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.appointments}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Esta semana</div>
-          </div>
-
-          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
-            <div className="text-sm font-medium text-muted-foreground">Remarcações</div>
-            <div className="mt-1 text-2xl font-bold tracking-tight text-[#006f9a]">{data.metrics.reschedules}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Apenas 3% do total</div>
-          </div>
-
-          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-center animate-entry delay-200">
-            <div className="text-xs font-medium text-muted-foreground">Cancelamentos</div>
+            <div className="text-sm font-medium text-muted-foreground">Cancelamentos</div>
             <div className="mt-1 text-2xl font-bold tracking-tight text-red-500">{data.metrics.cancellations}</div>
-          </div>
-
-          <div className="col-span-1 ap-card p-4 rounded-2xl flex flex-col justify-between animate-entry delay-200">
-            <div className="mb-2">
-              <span className="text-xs font-medium text-foreground leading-tight block">Seu feedback é importante pra nós</span>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {data.metrics.appointments > 0
+                ? `${Math.round((data.metrics.cancellations / (data.metrics.appointments + data.metrics.cancellations + data.metrics.reschedules)) * 100)}% do total`
+                : '0% do total'}
             </div>
-            <button className="w-full text-[10px] font-semibold bg-muted text-foreground hover:bg-muted/80 py-2 rounded-md transition-colors shadow-sm whitespace-normal leading-tight text-center px-1">
-              Fale com a equipe AtendePsi via WhatsApp
-            </button>
           </div>
 
           {/* Chart - Spans full width (4 cols) */}

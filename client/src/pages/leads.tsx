@@ -19,11 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  MessageCircle,
   Search,
-  Filter,
-  Pencil,
-  Trash2
+  Filter
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,11 +29,15 @@ type Lead = {
   id: number;
   name: string;
   phone: string;
-  last: string;
-  modality: string;
   email: string | null;
+  status: string;
+  frequency: string;
+  week_day: string;
+  time: string;
+  age: string;
+  billing_day: string;
   channel: string;
-  status: string; // Map from DB schema
+  last_contact: string;
 };
 
 export default function LeadsPage() {
@@ -65,11 +66,15 @@ export default function LeadsPage() {
             id: item.id,
             name: item.full_name || item.nome || "Sem Nome",
             phone: item.phone_number?.toString() || "",
-            last: formatTimeSince(item.last_message_at),
-            modality: item.modalidade || "N/A",
             email: item.email || "",
-            channel: item.indicacao || "N/A", // Assuming 'indicacao' maps to channel
-            status: mapStatus(item) // Need logic to derive status if not explicit column
+            status: item.status || "Novo",
+            frequency: item.frequencia?.toString() || "-",
+            week_day: item.week_day || "-",
+            time: item.horario || "-",
+            age: item.idade || "-",
+            billing_day: item.billing_day || "-",
+            channel: item.canal || "-",
+            last_contact: formatTimeSince(item.last_message_at)
           }));
           setLeads(mappedLeads);
         }
@@ -122,6 +127,36 @@ export default function LeadsPage() {
         return "bg-emerald-100 text-emerald-700 hover:bg-emerald-100";
       default:
         return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const updateLead = async (id: number, field: string, value: string) => {
+    try {
+      // Map frontend field names to DB column names if they differ
+      const dbFieldMap: Record<string, string> = {
+        frequency: 'frequencia',
+        week_day: 'week_day',
+        time: 'horario',
+        billing_day: 'billing_day'
+      };
+
+      const dbField = dbFieldMap[field] || field;
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ [dbField]: value })
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Optimistic update locally
+      setLeads(leads.map(l => l.id === id ? { ...l, [field]: value } : l));
+
+    } catch (error) {
+      console.error("Error updating lead:", error);
+      // Revert or show error toast here if needed
     }
   };
 
@@ -189,11 +224,16 @@ export default function LeadsPage() {
               <TableHeader className="sticky top-0 bg-white z-10 shadow-sm/5">
                 <TableRow className="hover:bg-transparent border-b border-border/50">
                   <TableHead className="pl-6 h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nome</TableHead>
-                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</TableHead>
                   <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Número</TableHead>
-                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Interação</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Frequência</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dia</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Horário</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Idade</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dia Cobrança</TableHead>
                   <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Canal</TableHead>
-                  <TableHead className="pr-6 h-10 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ações</TableHead>
+                  <TableHead className="h-10 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Últ. Contato</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -203,64 +243,51 @@ export default function LeadsPage() {
                     className="hover:bg-muted/30 border-b border-border/40 group transition-colors"
                   >
                     <TableCell className="pl-6 py-3">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm text-foreground">
-                          {lead.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{lead.email}</span>
-                      </div>
+                      <span className="font-medium text-sm text-foreground">{lead.name}</span>
                     </TableCell>
+                    <TableCell className="py-3 text-sm text-muted-foreground font-mono">{lead.phone}</TableCell>
+                    <TableCell className="py-3 text-sm text-muted-foreground">{lead.email}</TableCell>
                     <TableCell className="py-3">
-                      <Badge
-                        className={`rounded-md font-medium border-0 px-2.5 py-0.5 ${getStatusColor(lead.status)}`}
-                      >
+                      <Badge className={`rounded-md font-medium border-0 px-2.5 py-0.5 ${getStatusColor(lead.status)}`}>
                         {lead.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="py-3 text-sm text-muted-foreground font-mono">
-                      {lead.phone}
+                    <TableCell className="py-3 text-sm text-muted-foreground">
+                      <Input
+                        className="h-8 w-24 bg-transparent border-transparent hover:border-border focus:bg-white focus:border-primary transition-all p-2 text-sm"
+                        defaultValue={lead.frequency}
+                        onBlur={(e) => updateLead(lead.id, 'frequency', e.target.value)}
+                      />
                     </TableCell>
                     <TableCell className="py-3 text-sm text-muted-foreground">
-                      {lead.last}
+                      <Input
+                        className="h-8 w-24 bg-transparent border-transparent hover:border-border focus:bg-white focus:border-primary transition-all p-2 text-sm"
+                        defaultValue={lead.week_day}
+                        onBlur={(e) => updateLead(lead.id, 'week_day', e.target.value)}
+                      />
                     </TableCell>
                     <TableCell className="py-3 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground bg-muted/20 border-border/60">
-                          {lead.channel}
-                        </Badge>
-                      </div>
+                      <Input
+                        className="h-8 w-20 bg-transparent border-transparent hover:border-border focus:bg-white focus:border-primary transition-all p-2 text-sm"
+                        defaultValue={lead.time}
+                        onBlur={(e) => updateLead(lead.id, 'time', e.target.value)}
+                      />
                     </TableCell>
-                    <TableCell className="pr-6 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-[#006f9a] hover:bg-[#006f9a]/10 rounded-lg"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <div className="w-px h-4 bg-border/60 mx-1"></div>
-                        <Button
-                          size="sm"
-                          className="h-8 px-3 bg-[#006f9a]/10 text-[#006f9a] hover:bg-[#006f9a] hover:text-white border border-[#006f9a]/20 shadow-none font-medium transition-all rounded-lg"
-                        >
-                          <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-                          Conversar
-                        </Button>
-                      </div>
+                    <TableCell className="py-3 text-sm text-muted-foreground">{lead.age}</TableCell>
+                    <TableCell className="py-3 text-sm text-muted-foreground">
+                      <Input
+                        className="h-8 w-16 bg-transparent border-transparent hover:border-border focus:bg-white focus:border-primary transition-all p-2 text-sm"
+                        defaultValue={lead.billing_day}
+                        onBlur={(e) => updateLead(lead.id, 'billing_day', e.target.value)}
+                      />
                     </TableCell>
+                    <TableCell className="py-3 text-sm text-muted-foreground">{lead.channel}</TableCell>
+                    <TableCell className="py-3 text-sm text-muted-foreground">{lead.last_contact}</TableCell>
                   </TableRow>
                 ))}
                 {filteredLeads.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Search className="h-8 w-8 text-muted-foreground/30" />
                         <span>Nenhum contato encontrado</span>

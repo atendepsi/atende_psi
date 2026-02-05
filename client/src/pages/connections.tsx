@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Smartphone, ExternalLink } from "lucide-react";
+import { Calendar, MessageCircle, CheckCircle2, AlertCircle, Loader2, QrCode, Smartphone, ExternalLink, Info } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -441,6 +441,7 @@ export default function ConnectionsPage() {
     } else {
       setProcessing('calendar');
       try {
+        if (!user) return; // Safety check
         // 1. Try to revoke token on Google (Best effort)
         // We need the access token. It's in the DB.
         const { data } = await supabase
@@ -492,11 +493,11 @@ export default function ConnectionsPage() {
 
   return (
     <AtendePsiShell title="Conexões">
-      <div className="h-full overflow-y-auto flex-1 min-h-0 pb-1">
-        <div className="flex flex-col gap-6 max-w-3xl mx-auto">
+      <div className="h-full overflow-y-auto flex-1 min-h-0 pb-6 px-6">
+        <div className="flex flex-col gap-6 h-full">
 
           {/* WhatsApp Block */}
-          <div className="ap-card ap-noise rounded-3xl p-8 relative overflow-hidden group">
+          <div className="ap-card ap-noise rounded-3xl p-6 md:p-8 relative overflow-hidden group flex-1 flex flex-col justify-center animate-entry">
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
               <MessageCircle className="w-64 h-64 -mr-16 -mt-16 text-[#006f9a]" />
             </div>
@@ -508,13 +509,18 @@ export default function ConnectionsPage() {
                   <MessageCircle className={`h-8 w-8 ${whatsappStatus === 'connected' ? 'text-[#006f9a]' : 'text-muted-foreground'}`} />
                 </div>
                 <div className="space-y-3 w-full max-w-lg">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold tracking-tight text-foreground">WhatsApp Business</h2>
-                    {whatsappStatus === 'connected' ? (
-                      <Badge className="bg-[#006f9a] hover:bg-[#005a7d] text-white border-0 px-3 py-1">Conectado</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">Desconectado</Badge>
-                    )}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground">WhatsApp Business</h2>
+                      {whatsappStatus === 'connected' ? (
+                        <Badge className="bg-[#006f9a] hover:bg-[#005a7d] text-white border-0 px-3 py-1 shadow-sm shadow-[#006f9a]/20 animate-pulse-gentle">Conectado</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-border text-foreground/70 font-medium">Desconectado</Badge>
+                      )}
+                    </div>
+                    <p className="text-foreground/80 text-sm max-w-lg leading-relaxed font-medium">
+                      Conecte seu WhatsApp para habilitar a IA. Ela responderá seus pacientes automaticamente 24h por dia, tirando dúvidas e realizando agendamentos.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -523,6 +529,7 @@ export default function ConnectionsPage() {
                       <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <span className="text-muted-foreground font-medium">+55</span>
                       </div>
+
                       <Input
                         value={formatPhoneNumber(phone || "")}
                         onChange={(e) => {
@@ -532,9 +539,18 @@ export default function ConnectionsPage() {
                         }}
                         placeholder="(DDD) 9 9999-9999"
                         disabled={!!dataPhone || whatsappStatus === 'connected'}
-                        className="bg-background/80 pl-12 font-medium"
+                        className="bg-background border-input font-medium text-foreground placeholder:text-muted-foreground/70 pl-12 h-12 text-base"
                       />
                     </div>
+                    {whatsappStatus !== 'connected' && (
+                      <div className="bg-blue-50/50 border border-blue-100/50 rounded-xl p-4 flex items-start gap-3">
+                        <Info className="h-5 w-5 text-blue-600/80 mt-0.5 shrink-0" />
+                        <p className="text-sm text-blue-900/70 font-medium leading-relaxed">
+                          <span className="font-semibold text-blue-800 block mb-1">Nota importante</span>
+                          Ao conectar, a IA responderá automaticamente as mensagens deste número.
+                        </p>
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {whatsappStatus === 'connected'
                         ? "Número conectado e vinculado à instância."
@@ -558,7 +574,7 @@ export default function ConnectionsPage() {
                       variant="ghost"
                       disabled={!!processing}
                       onClick={() => handleToggle('whatsapp', 'disconnect')}
-                      className="w-full rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      className="w-full rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-12 px-6 text-sm font-medium"
                     >
                       {processing === 'whatsapp' ? <Loader2 className="animate-spin" /> : "Desconectar"}
                     </Button>
@@ -569,29 +585,29 @@ export default function ConnectionsPage() {
                       <Button
                         onClick={handleSaveInstance}
                         disabled={!!processing || !phone}
-                        className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
+                        className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-xl shadow-[#006f9a]/20 h-14 px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
                       >
-                        {processing === 'save_instance' ? <Loader2 className="animate-spin mr-2" /> : null}
+                        {processing === 'save_instance' ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
                         Salvar e Criar Instância
                       </Button>
                     ) : (
-                      <div className="flex flex-col gap-2 w-full">
+                      <div className="flex flex-col gap-3 w-full">
                         <Button
                           onClick={handleConnectWhatsapp}
                           disabled={!!processing}
-                          className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
+                          className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-xl shadow-[#006f9a]/20 h-14 px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
                         >
-                          {processing === 'whatsapp' ? <Loader2 className="animate-spin mr-2" /> : null}
+                          {processing === 'whatsapp' ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
                           Conectar WhatsApp
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="lg"
                           disabled={!!processing}
                           onClick={handleDeleteInstance}
-                          className="text-xs text-destructive hover:text-destructive/80"
+                          className="w-full rounded-full text-destructive hover:text-destructive hover:bg-destructive/10 h-12 px-6 text-sm font-medium"
                         >
-                          {processing === 'delete_instance' ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : null}
+                          {processing === 'delete_instance' ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                           Excluir Instância
                         </Button>
                       </div>
@@ -602,14 +618,15 @@ export default function ConnectionsPage() {
             </div>
           </div>
 
+
           {/* Google Calendar Block */}
-          <div className="ap-card ap-noise rounded-3xl p-8 relative overflow-hidden group">
+          <div className="ap-card ap-noise rounded-3xl p-6 md:p-8 relative overflow-hidden group flex-1 flex flex-col justify-center animate-entry delay-100">
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
               <Calendar className="w-64 h-64 -mr-16 -mt-16 text-[#006f9a]" />
             </div>
 
             <div className="relative z-10 flex flex-col md:flex-row gap-8 items-start md:items-center justify-between">
-              <div className="flex items-start gap-5">
+              <div className="flex items-start gap-5 flex-1">
                 <div className={`h-16 w-16 rounded-2xl flex items-center justify-center shrink-0 border transition-colors ${calendarStatus === 'connected' ? 'bg-[#006f9a]/10 border-[#006f9a]/20' : 'bg-muted border-border'
                   }`}>
                   <Calendar className={`h-8 w-8 ${calendarStatus === 'connected' ? 'text-[#006f9a]' : 'text-muted-foreground'}`} />
@@ -618,15 +635,18 @@ export default function ConnectionsPage() {
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-bold tracking-tight text-foreground">Google Agenda</h2>
                     {calendarStatus === 'connected' ? (
-                      <Badge className="bg-[#006f9a] hover:bg-[#005a7d] text-white border-0 px-3 py-1">Conectado</Badge>
+                      <Badge className="bg-[#006f9a] hover:bg-[#005a7d] text-white border-0 px-3 py-1 shadow-sm shadow-[#006f9a]/20 animate-pulse-gentle">Conectado</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-muted-foreground">Desconectado</Badge>
+                      <Badge variant="outline" className="border-border text-foreground/70 font-medium">Desconectado</Badge>
                     )}
                   </div>
-                  <p className="text-muted-foreground text-base max-w-md leading-relaxed">
+                  <p className="text-foreground/80 text-base max-w-md leading-relaxed font-medium">
+                    Integre sua agenda oficial para que a IA verifique sua disponibilidade em tempo real e agende sessões diretamente no seu calendário.
+                  </p>
+                  <p className="text-sm text-muted-foreground pt-1">
                     {googleStatus?.connected
                       ? `Conectado como ${googleStatus.email}`
-                      : "Conecte sua agenda para que a IA possa consultar horários livres e agendar consultas automaticamente."
+                      : "Conecte sua agenda para que a IA possa consultar horários livres e agendar sessões automaticamente."
                     }
                   </p>
                   {calendarStatus !== 'connected' && (
@@ -638,23 +658,23 @@ export default function ConnectionsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 w-full md:w-auto">
+              <div className="flex flex-col gap-3 w-full md:w-auto min-w-[200px]">
                 {calendarStatus === 'connected' ? (
                   <Button
                     variant="ghost"
                     disabled={!!processing}
                     onClick={() => handleToggle('calendar', 'disconnect')}
-                    className="w-full md:w-auto rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    className="w-full rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-12 px-6 text-sm font-medium"
                   >
-                    {processing === 'calendar' ? <Loader2 className="animate-spin" /> : "Desconectar"}
+                    {processing === 'calendar' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : "Desconectar"}
                   </Button>
                 ) : (
                   <Button
                     onClick={() => handleToggle('calendar', 'connect')}
                     disabled={!!processing}
-                    className="w-full md:w-auto rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-lg shadow-[#006f9a]/20 h-10 px-6 font-semibold"
+                    className="w-full rounded-full bg-[#006f9a] hover:bg-[#005a7d] text-white shadow-xl shadow-[#006f9a]/20 h-14 px-8 text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    {processing === 'calendar' ? <Loader2 className="animate-spin mr-2" /> : null}
+                    {processing === 'calendar' ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
                     Conectar Agenda
                   </Button>
                 )}
@@ -682,7 +702,7 @@ export default function ConnectionsPage() {
           </DialogContent>
         </Dialog>
 
-      </div>
-    </AtendePsiShell>
+      </div >
+    </AtendePsiShell >
   );
 }

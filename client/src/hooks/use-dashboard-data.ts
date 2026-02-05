@@ -67,14 +67,15 @@ export const useDashboardData = () => {
                 const todayMetrics = metricsData?.find(m => m.day === todayStr);
                 const yesterdayMetrics = metricsData?.find(m => m.day === yesterdayStr);
 
-                // 3. Fetch Leads Counts (Total, Today, Yesterday)
-                // Total
-                const { count: totalLeads } = await supabase
+                // 3. Fetch Leads Counts
+                // Active Patients Today (Leads with messages today)
+                const { count: activeLeadsToday } = await supabase
                     .from('leads')
                     .select('*', { count: 'exact', head: true })
-                    .eq('user_id', user.id);
+                    .eq('user_id', user.id)
+                    .gte('last_message_at', `${todayStr}T00:00:00`);
 
-                // Leads Today
+                // Leads Today (Created today)
                 const { count: leadsToday } = await supabase
                     .from('leads')
                     .select('*', { count: 'exact', head: true })
@@ -121,14 +122,14 @@ export const useDashboardData = () => {
                         aiName: profile?.ai_name || "Assistente",
                     },
                     metrics: {
-                        totalPatients: totalLeads || 0,
+                        totalPatients: activeLeadsToday || 0,
                         averageTime: timeToday ? `${timeToday}s` : "0s",
                         averageTimeChange: timeChange,
                         totalMessages: msgsToday.toString(),
                         totalMessagesChange: msgsChange,
                         aiAutonomy: "100%", // Placeholder until explicit tracking
                         aiAutonomyChange: { value: 0, trend: "neutral" },
-                        humanRedirects: 0,
+                        humanRedirects: todayMetrics?.redirects || 0,
                         appointments: todayMetrics?.appointments || 0,
                         reschedules: todayMetrics?.reschedules || 0,
                         cancellations: todayMetrics?.cancellations || 0,

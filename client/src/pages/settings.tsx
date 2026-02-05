@@ -29,11 +29,20 @@ export default function SettingsPage() {
     }
   };
 
-  const [tone, setTone] = React.useState("Objetiva");
   const [agentName, setAgentName] = React.useState("Sofia");
+  const [tone, setTone] = React.useState("Objetiva");
+  const [modality, setModality] = React.useState("Online");
+  const [sessionDuration, setSessionDuration] = React.useState("");
+  const [timezone, setTimezone] = React.useState("");
 
   const [restrictions, setRestrictions] = React.useState<string[]>([]); // Initialize empty
   const [newRestriction, setNewRestriction] = React.useState("");
+
+  React.useEffect(() => {
+    // Detect timezone on mount
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setTimezone(detectedTimezone);
+  }, []);
 
   const fetchProfile = async () => {
     try {
@@ -56,6 +65,9 @@ export default function SettingsPage() {
           setAgentName(data.ai_name || "Sofia");
           setTone(data.ai_tone || "Objetiva");
           setRestrictions(data.ai_restrictions || []);
+          if (data.timezone) setTimezone(data.timezone);
+          if (data.modality) setModality(data.modality);
+          if (data.session_duration) setSessionDuration(data.session_duration);
         }
       }
     } catch (error) {
@@ -89,6 +101,9 @@ export default function SettingsPage() {
         ai_name: agentName,
         ai_tone: tone,
         ai_restrictions: restrictions,
+        timezone: timezone,
+        modality: modality,
+        session_duration: sessionDuration,
         updated_at: new Date().toISOString(),
       };
 
@@ -149,6 +164,49 @@ export default function SettingsPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Duração da Sessão (min)</Label>
+                <Input
+                  value={sessionDuration}
+                  onChange={(e) => setSessionDuration(e.target.value)}
+                  placeholder="50"
+                  className="h-10 rounded-xl bg-muted/40 border-border/60 text-base"
+                />
+              </div>
+
+
+
+
+
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Fuso Horário</Label>
+                <Input
+                  value={timezone}
+                  readOnly
+                  className="h-10 rounded-xl bg-muted/40 border-border/60 text-base text-muted-foreground"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Modalidade de Atendimento</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["Online", "Misto", "Presencial"].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setModality(m)}
+                      className={cn(
+                        "px-2 py-2 rounded-lg text-xs font-medium transition-all border",
+                        modality === m
+                          ? "bg-[#006f9a] text-white border-[#006f9a] shadow-sm"
+                          : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/60"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2 md:col-span-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Tom de Comunicação</Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -189,6 +247,9 @@ export default function SettingsPage() {
               ))}
             </div>
 
+
+
+
             <div className="mt-3 flex gap-2">
               <Input
                 placeholder="Adicionar restrição..."
@@ -201,6 +262,22 @@ export default function SettingsPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+
+          <div className="ap-card rounded-xl p-4 bg-muted/30 border border-border/40">
+            <div className="mb-3">
+              <span className="text-sm font-medium text-foreground block">Precisa de ajuda?</span>
+              <span className="text-xs text-muted-foreground">Entre em contato com nossa equipe de suporte.</span>
+            </div>
+            <a
+              href="https://api.whatsapp.com/send/?phone=5531972269357&text=Ol%C3%A1%2C+eu+preciso+de+ajuda+com+o+AtendePsi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 text-xs font-semibold bg-[#25D366] hover:bg-[#128C7E] text-white py-2.5 rounded-lg transition-colors shadow-sm"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+              Fale com a equipe (WhatsApp)
+            </a>
           </div>
 
           <div className="flex justify-between items-center pt-8 border-t border-border/50">
@@ -220,6 +297,6 @@ export default function SettingsPage() {
 
         </div>
       </div>
-    </AtendePsiShell>
+    </AtendePsiShell >
   );
 }
