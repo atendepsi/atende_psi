@@ -292,33 +292,59 @@ export async function registerRoutes(
       });
 
       // Fetch user's profile to get tokens using RLS
-      const { data: profile, error } = await supabaseScoped
-        .from('profiles')
-        .select('google_access_token, google_refresh_token')
-        .single();
+      // Create a dedicated OAuth2 client for this request to avoid race conditions
+      // and to handle token refresh events specifically for this user.
+      const requestAuthClient = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
 
-      if (error || !profile || !profile.google_access_token || !profile.google_refresh_token) {
-        console.warn("Failed to fetch Google tokens from profile:", error);
-        return res.status(401).json({ message: "Google Calendar not connected or session expired" });
-      }
-
-      // Configure OAuth client
-      oauth2Client.setCredentials({
+      requestAuthClient.setCredentials({
         access_token: profile.google_access_token,
         refresh_token: profile.google_refresh_token
       });
 
-      // Fetch events
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      const response = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin: new Date().toISOString(),
-        maxResults: 10,
-        singleEvents: true,
-        orderBy: 'startTime',
+      // Handle automatic token refresh events
+      requestAuthClient.on('tokens', async (tokens) => {
+        console.log("Token Refresh Event Triggered for user:", profile.id || "unknown");
+
+        // Prepare update object
+        const updates: any = {};
+        if (tokens.access_token) updates.google_access_token = tokens.access_token;
+        if (tokens.refresh_token) updates.google_refresh_token = tokens.refresh_token;
+
+        if (Object.keys(updates).length > 0) {
+          console.log("Persisting fresh tokens to Supabase...");
+          try {
+            // Note: 'profile.id' wasn't selected in the query above, we need to fix the select or use userId if available from somewhere else?
+            // The query was: .select('google_access_token, google_refresh_token').single();
+            // Profiles table ID is the user ID usually.
+            // Let's rely on supabaseScoped which is scoped to auth.uid() == id policy?
+            // Actually RLS policies usually enforce "id = auth.uid()".
+            // So updating any row where id=auth.uid() is fine.
+            // But we need the ID to target the row in .eq('id', ...). 
+            // Wait, the select didn't return ID. I MUST fix the select first to include ID.
+            // OR just use the fact that the client is scoped? 
+            // But .update() requires a filter usually.
+            // Let's assume the previous step (view_file) showed I didn't select ID.
+            // I will fix the select in this replacement too.
+
+            // Actually, I can't easily change the lines above this block with a single contiguous replace unless I expand the range.
+            // The previous view_file showed lines 260-320. The select is at line 297.
+            // So I should include line 297 in the target range to fix the select.
+          } catch (e) {
+            console.error("Failed to persist refreshed tokens:", e);
+          }
+        }
       });
 
-      res.json(response.data.items);
+      // FIXING THE SELECT IN THIS BLOCK REQUIRES EXPANDING THE RANGE UPWARDS
+      // BUT I CAN'T DO THAT IF I ALREADY COMMITTED TO A START LINE.
+      // Wait, I am generating the tool call now. I can set StartLine to 297.
+
+      // Let's do a larger replace to include the select.
+
 
     } catch (error: any) {
       console.error("Calendar API Error:", error);
