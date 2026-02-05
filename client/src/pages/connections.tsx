@@ -108,12 +108,7 @@ export default function ConnectionsPage() {
   const checkWhatsappStatus = async () => {
     if (!whatsappToken) return;
     try {
-      const res = await fetch('https://atendepsi.uazapi.com/instance/status', {
-        headers: {
-          'Accept': 'application/json',
-          'token': whatsappToken
-        }
-      });
+      const res = await fetch(`/api/integrations/whatsapp/status?token=${whatsappToken}`);
       const data = await res.json();
 
       if (data && data.instance && data.instance.status === 'connected') {

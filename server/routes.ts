@@ -124,6 +124,57 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/integrations/whatsapp/init", async (req, res) => {
+    const body = req.body;
+    try {
+      const response = await fetch(`${API_BASE}/instance/init`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'admintoken': 'NfKtuDQbRoyrBFuw5gxxWNtLzJey4kA8eewgzO4VwOBgpDpYdK'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        res.status(response.status).json(data);
+        return;
+      }
+      res.json(data);
+    } catch (error) {
+      console.error("WhatsApp Init Error:", error);
+      res.status(500).json({ message: "Failed to create instance" });
+    }
+  });
+
+  app.delete("/api/integrations/whatsapp/delete", async (req, res) => {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/instance`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'token': token
+        }
+      });
+
+      // Even if it fails, we return success to allow UI to clear
+      // But let's try to forward the info
+      const data = await response.json().catch(() => ({}));
+      res.json(data);
+    } catch (error) {
+      console.error("WhatsApp Delete Error:", error);
+      // We return success to not block UI cleanup
+      res.json({ success: true, warning: "Failed to reach API but local cleared" });
+    }
+  });
+
 
 
   // Google Calendar Integration Routes
