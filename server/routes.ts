@@ -150,7 +150,14 @@ export async function registerRoutes(
   // 1. Auth URL generator
   app.get("/api/auth/google", (req, res) => {
     if (!oauth2Client) {
-      return res.status(503).json({ message: "Google Integration not configured on server." });
+      const missing = [];
+      if (!process.env.GOOGLE_CLIENT_ID) missing.push("GOOGLE_CLIENT_ID");
+      if (!process.env.GOOGLE_CLIENT_SECRET) missing.push("GOOGLE_CLIENT_SECRET");
+      if (!process.env.GOOGLE_REDIRECT_URI) missing.push("GOOGLE_REDIRECT_URI");
+      return res.status(503).json({
+        message: "Google Integration not configured on server.",
+        missing_vars: missing
+      });
     }
 
     try {
