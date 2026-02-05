@@ -261,51 +261,19 @@ export async function registerRoutes(
   });
 
   // 4. Manual Refresh Endpoint (For n8n/External Tools)
+  // 4. Manual Refresh Endpoint (For n8n/External Tools)
   app.post("/api/integrations/google/refresh", async (req, res) => {
-    // For n8n, we might verify a secret or just the user ID if testing.
-    // Ideally use a Bearer token or api key. For simplicity here assuming body has { userId } or token.
-    const { userId } = req.body;
+    // Exact request format for user:
+    // POST /api/integrations/google/refresh
+    // Body: { "refresh_token": "YOUR_REFRESH_TOKEN" }
 
-    if (!userId) {
-      return res.status(400).json({ message: "userId is required" });
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({ message: "refresh_token is required in body" });
     }
 
     try {
-      const sbUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-      const sbKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-      if (!sbUrl || !sbKey) return res.status(500).json({ message: "Server Config Error" });
-
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabaseAdmin = createClient(sbUrl, sbKey); // Using anon key might be read-only for public? 
-      // Actually we need the users tokens. If we use Anon, we need RLS policy to allow reading based on nothing?
-      // Wait, connections.tsx saves tokens to 'profiles'.
-      // If we use service role here it's unsafe if unrestricted.
-      // But for this 'fix', I will use the stored 'storage.getGoogleToken' logic 
-      // OR better: Re-use the oauth logic pattern but we need the REFRESH TOKEN from DB.
-
-      // Since we don't have the user's JWT in n8n (likely), we might face an RLS block if we use client-side key.
-      // BUT 'storage.ts' uses a map? No, storage.ts is a file. 
-      // Let's use the 'storage' module if it has what we need, OR use a service-role client if available in env safely 
-      // (User provided SUPABASE_SERVICE_ROLE_KEY? likely not).
-
-      // LET'S ASSUME the request sends the 'whatsapp_token' or some identifier we can verify.
-      // For now, to solve "The server doesn't know", I will implement it assuming we can fetch the profile.
-      // If n8n can't authenticate, this won't work.
-      // HACK: Allow passing the EXPIRED access_token to look up the user? No, collisions.
-
-      // Let's rely on the user passing their UUID (User ID) which they can get from the dashboard.
-
-      const { data: profile, error } = await supabaseAdmin
-        .from('profiles')
-        .select('id, google_access_token, google_refresh_token')
-        .eq('id', userId)
-        .single();
-
-      if (error || !profile) {
-        return res.status(404).json({ message: "User not found or no tokens" });
-      }
-
       const requestAuthClient = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
@@ -313,36 +281,13 @@ export async function registerRoutes(
       );
 
       requestAuthClient.setCredentials({
-        access_token: profile.google_access_token,
-        refresh_token: profile.google_refresh_token
+        refresh_token: refresh_token
       });
 
       // Force check/refresh
       const { token: newToken } = await requestAuthClient.getAccessToken();
 
-      // Notes: getAccessToken() handles refresh if needed. 
-      // If it refreshed, the 'tokens' event might have fired if we set a listener, 
-      // but getAccessToken returns the valid token string directly.
-      // We should explicitely check if it changed or just update always?
-      // Better: Attach the listener like before to capture the full token object (expiry etc).
-
-      let refreshedDetails: any = null;
-
-      requestAuthClient.on('tokens', async (tokens) => {
-        refreshedDetails = tokens;
-        const updates: any = {};
-        if (tokens.access_token) updates.google_access_token = tokens.access_token;
-        if (tokens.refresh_token) updates.google_refresh_token = tokens.refresh_token;
-
-        if (Object.keys(updates).length > 0) {
-          console.log("Saving refreshed token for via API...");
-          await supabaseAdmin.from('profiles').update(updates).eq('id', userId);
-        }
-      });
-
-      // Trigger the refresh logic if expired
       if (newToken) {
-        // If the listener caught it, it's saved.
         res.json({ success: true, access_token: newToken });
       } else {
         res.status(500).json({ message: "Failed to obtain access token" });
@@ -350,7 +295,11 @@ export async function registerRoutes(
 
     } catch (e: any) {
       console.error("Refresh API Error:", e);
-      res.status(500).json({ message: e.message });
+      if (e.code === 401 || e.response?.status === 401) {
+        res.status(401).json({ message: "Invalid Grant / Refresh Token Expired", detail: e.message });
+      } else {
+        res.status(500).json({ message: e.message });
+      }
     }
   });
 

@@ -4,7 +4,7 @@ import { AtendePsiShell } from "@/components/atendepsi-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, X, LogOut } from "lucide-react";
+import { Plus, X, LogOut, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,19 @@ export default function SettingsPage() {
   const { signOut } = useAuth();
   const [loading, setLoading] = React.useState(true);
   const [userId, setUserId] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopyId = () => {
+    if (userId) {
+      navigator.clipboard.writeText(userId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({
+        description: "ID copiado para a área de transferência",
+        className: "bg-green-600 text-white border-none h-10"
+      });
+    }
+  };
 
   const [tone, setTone] = React.useState("Objetiva");
   const [agentName, setAgentName] = React.useState("Sofia");
@@ -114,7 +127,17 @@ export default function SettingsPage() {
 
           {/* Profile Section - Compact */}
           <div className="ap-card rounded-2xl p-5 bg-card/50 border border-border/60 shadow-sm">
-            <h2 className="text-lg font-semibold tracking-tight mb-3">Perfil do Agente</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold tracking-tight">Perfil do Agente</h2>
+              {userId && (
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground bg-muted/40 px-2 py-1 rounded-full border border-border/40 hover:bg-muted/60 transition-colors" title="User ID para n8n">
+                  <span className="font-mono opacity-70">ID: {userId}</span>
+                  <button onClick={handleCopyId} className="hover:text-primary transition-colors">
+                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
