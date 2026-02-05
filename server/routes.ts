@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { insertMemorySchema, insertSettingsSchema } from "../shared/schema.js";
 import { z } from "zod";
+import { google } from "googleapis";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -127,23 +128,19 @@ export async function registerRoutes(
 
   // Google Calendar Integration Routes
   let oauth2Client: any = null;
-  let google: any = null;
 
-  try {
-    const googleModule = await import('googleapis');
-    google = googleModule.google;
-
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
-      console.warn("Google Calendar Env Vars missing. Integration disabled.");
-    } else {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
+    console.warn("Google Calendar Env Vars missing. Integration disabled.");
+  } else {
+    try {
       oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
         process.env.GOOGLE_REDIRECT_URI
       );
+    } catch (err) {
+      console.error("Failed to initialize Google OAuth2:", err);
     }
-  } catch (err) {
-    console.error("Failed to initialize Google Calendar integration:", err);
   }
 
   // 1. Auth URL generator
