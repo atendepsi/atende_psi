@@ -5,6 +5,13 @@ import { app, setupServer } from "../server/index.js";
 const setupPromise = setupServer();
 
 export default async function handler(req: any, res: any) {
-    await setupPromise;
-    app(req, res);
+    console.log("[DEBUG] Vercel handler started. Setup promise status pending...");
+    try {
+        await setupPromise;
+        console.log("[DEBUG] Setup promise resolved. Handing off to app.");
+        app(req, res);
+    } catch (e) {
+        console.error("[DEBUG] Setup failed:", e);
+        res.status(500).json({ error: "Server setup failed", details: String(e) });
+    }
 }
