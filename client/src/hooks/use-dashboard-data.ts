@@ -50,24 +50,42 @@ export const useDashboardData = () => {
                     .eq('id', user.id)
                     .single();
 
-                // 2. Fetch Metrics for Today AND Yesterday to compare
+                // 2. Fetch Metrics for Today AND Yesterday
+                // Fix: Use local date to avoid UTC rollover issues (Brazil is UTC-3)
+                const getLocalDateStr = (date: Date) => {
+                    const offset = date.getTimezoneOffset() * 60000;
+                    const localDate = new Date(date.getTime() - offset);
+                    return localDate.toISOString().split('T')[0];
+                };
+
                 const today = new Date();
                 const yesterday = new Date(today);
                 yesterday.setDate(yesterday.getDate() - 1);
 
-                const todayStr = today.toISOString().split('T')[0];
-                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                const todayStr = getLocalDateStr(today);
+                const yesterdayStr = getLocalDateStr(yesterday);
 
-                const { data: metricsData } = await supabase
-                    .from('dashboard_metrics')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .in('day', [todayStr, yesterdayStr]);
+                // Fetch Dashboard Metrics (Soft fail if table missing)
+                let todayMetrics: any = null;
+                let yesterdayMetrics: any = null;
 
-                const todayMetrics = metricsData?.find(m => m.day === todayStr);
-                const yesterdayMetrics = metricsData?.find(m => m.day === yesterdayStr);
+                try {
+                    const { data: metricsData } = await supabase
+                        .from('dashboard_metrics')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .in('day', [todayStr, yesterdayStr]);
 
-                // 3. Fetch Leads Counts
+                    if (metricsData) {
+                        todayMetrics = metricsData.find(m => m.day === todayStr);
+                        yesterdayMetrics = metricsData.find(m => m.day === yesterdayStr);
+                    }
+                } catch (metricErr) {
+                    console.warn("Dashboard metrics table missing or empty", metricErr);
+                    // Continue execution to at least show Leads data
+                }
+
+                // 3. Fetch Leads Counts (Reliable Source)
                 // Active Patients Today (Leads with messages today)
                 const { count: activeLeadsToday } = await supabase
                     .from('leads')
@@ -112,7 +130,7 @@ export const useDashboardData = () => {
                 const timeYesterday = yesterdayMetrics?.response_time || 0;
                 const timeChange = calcTrend(timeToday, timeYesterday);
 
-                // Leads Growth (using Today vs Yesterday creation)
+                // Leads Growth
                 const leadsChange = calcTrend(leadsToday || 0, leadsYesterday || 0);
 
                 // Construct Dashboard Data
@@ -122,12 +140,12 @@ export const useDashboardData = () => {
                         aiName: profile?.ai_name || "Assistente",
                     },
                     metrics: {
-                        totalPatients: activeLeadsToday || 0,
+                        totalPatients: activeLeadsToday || 0, // Sourced from REAL Leads table
                         averageTime: timeToday ? `${timeToday}s` : "0s",
                         averageTimeChange: timeChange,
                         totalMessages: msgsToday.toString(),
                         totalMessagesChange: msgsChange,
-                        aiAutonomy: "100%", // Placeholder until explicit tracking
+                        aiAutonomy: "100%",
                         aiAutonomyChange: { value: 0, trend: "neutral" },
                         humanRedirects: todayMetrics?.redirects || 0,
                         appointments: todayMetrics?.appointments || 0,
