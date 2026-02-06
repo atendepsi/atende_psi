@@ -87,27 +87,21 @@ export const useDashboardData = () => {
 
                 // 3. Fetch Leads Counts (Reliable Source)
                 // Active Patients Today (Leads with messages today)
-                const { count: activeLeadsToday } = await supabase
-                    .from('leads')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('user_id', user.id)
-                    .gte('last_message_at', `${todayStr}T00:00:00`);
-
-                // Leads Today (Created today)
+                // Leads Today (Active today)
                 const { count: leadsToday } = await supabase
                     .from('leads')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
-                    .gte('created_at', `${todayStr}T00:00:00`)
-                    .lte('created_at', `${todayStr}T23:59:59`);
+                    .gte('last_message_at', `${todayStr}T00:00:00`)
+                    .lte('last_message_at', `${todayStr}T23:59:59`);
 
                 // Leads Yesterday
                 const { count: leadsYesterday } = await supabase
                     .from('leads')
                     .select('*', { count: 'exact', head: true })
                     .eq('user_id', user.id)
-                    .gte('created_at', `${yesterdayStr}T00:00:00`)
-                    .lte('created_at', `${yesterdayStr}T23:59:59`);
+                    .gte('last_message_at', `${yesterdayStr}T00:00:00`)
+                    .lte('last_message_at', `${yesterdayStr}T23:59:59`);
 
 
                 // Helper for trends
@@ -140,7 +134,7 @@ export const useDashboardData = () => {
                         aiName: profile?.ai_name || "Assistente",
                     },
                     metrics: {
-                        totalPatients: activeLeadsToday || 0, // Sourced from REAL Leads table
+                        totalPatients: leadsToday || 0, // Sourced from REAL Leads table
                         averageTime: timeToday ? `${timeToday}s` : "0s",
                         averageTimeChange: timeChange,
                         totalMessages: msgsToday.toString(),
